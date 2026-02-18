@@ -31,6 +31,7 @@ function Show-Help {
     Write-Host '  . .\wt.ps1 -                switch to the main (first) worktree.'
     Write-Host '  . .\wt.ps1 current          show the current worktree.'
     Write-Host '  . .\wt.ps1 add <branch>     add a new worktree for <branch> as a sibling folder.'
+    Write-Host '  . .\wt.ps1 remove <branch>  remove the worktree matching <branch>.'
 }
 
 function Get-WorktreeList {
@@ -125,6 +126,21 @@ function Invoke-AddWorktree([string]$Branch) {
     git worktree add $worktreePath $Branch
 }
 
+function Invoke-RemoveWorktree([string]$Name) {
+    if (-not $Name) {
+        Write-Host 'Usage: wt remove <branch-name>'
+        return
+    }
+    $worktrees = Get-ParsedWorktrees
+    $match = $worktrees | Where-Object { $_.Path -match [regex]::Escape($Name) -or $_.Branch -match [regex]::Escape($Name) } | Select-Object -First 1
+    if (-not $match) {
+        Write-Host "No worktree matching '$Name' found."
+        return
+    }
+    Write-Host "Removing worktree at: $($match.Path)"
+    git worktree remove $match.Path
+}
+
 function Invoke-Update {
     try {
         $release = Invoke-RestMethod -Uri $RELEASE_API_URL -ErrorAction Stop
@@ -171,6 +187,7 @@ switch ($Command) {
     '-'       { Invoke-GotoMain }
     'current' { Show-CurrentWorktree }
     'add'     { Invoke-AddWorktree $Arg }
+    'remove'  { Invoke-RemoveWorktree $Arg }
     'update'  { Invoke-Update }
     default   { Invoke-Switch $Command }
 }

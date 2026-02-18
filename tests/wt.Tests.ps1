@@ -206,6 +206,61 @@ Describe 'wt.ps1' {
         }
     }
 
+    Describe 'Remove worktree (unit, mocked git)' {
+        BeforeAll {
+            . $ScriptPath -Command '__noop__'
+        }
+
+        BeforeEach {
+            Mock git {}
+            Mock Write-Host {}
+        }
+
+        It 'calls git worktree remove with the matching path' {
+            Mock git {
+                @(
+                    'worktree /repo/main',
+                    'HEAD abc123',
+                    'branch refs/heads/main',
+                    '',
+                    'worktree /repo/feature-foo',
+                    'HEAD def456',
+                    'branch refs/heads/feature-foo',
+                    ''
+                )
+            } -ParameterFilter { $args[0] -eq 'worktree' -and $args[1] -eq 'list' }
+
+            Invoke-RemoveWorktree 'feature-foo'
+
+            Should -Invoke git -ParameterFilter {
+                $args[0] -eq 'worktree' -and
+                $args[1] -eq 'remove' -and
+                $args[2] -eq '/repo/feature-foo'
+            }
+        }
+
+        It 'prints an error when no name is given' {
+            Invoke-RemoveWorktree ''
+            Should -Invoke Write-Host -ParameterFilter { $Object -match 'branch' }
+            Should -Invoke git -Times 0 -ParameterFilter { $args[0] -eq 'worktree' -and $args[1] -eq 'remove' }
+        }
+
+        It 'prints an error when no worktree matches' {
+            Mock git {
+                @(
+                    'worktree /repo/main',
+                    'HEAD abc123',
+                    'branch refs/heads/main',
+                    ''
+                )
+            } -ParameterFilter { $args[0] -eq 'worktree' -and $args[1] -eq 'list' }
+
+            Invoke-RemoveWorktree 'nonexistent'
+            Should -Invoke Write-Host -ParameterFilter { $Object -match 'nonexistent' }
+            Should -Invoke git -Times 0 -ParameterFilter { $args[0] -eq 'worktree' -and $args[1] -eq 'remove' }
+        }
+    }
+
     Describe 'Interactive mode without fzf' {
         BeforeAll {
             . $ScriptPath -Command '__noop__'

@@ -45,6 +45,27 @@ help_message() {
 	echo -e "\twt help: shows this help message."
 	echo -e "\twt current: show the current worktree."
 	echo -e "\twt add <branch>: add a new worktree for <branch> as a sibling folder."
+	echo -e "\twt remove <branch>: remove the worktree matching <branch>."
+}
+
+remove_worktree() {
+	local name="$1"
+	if [ -z "$name" ]; then
+		echo "Usage: wt remove <branch-name>"
+		return 1
+	fi
+	local match_path
+	match_path=$(git worktree list --porcelain | awk -v name="$name" '
+		/^worktree / { path = substr($0, 10) }
+		/^branch /   { branch = substr($0, 8); sub("^refs/heads/", "", branch) }
+		/^$/         { if (path ~ name || branch ~ name) { print path; exit } }
+	')
+	if [ -z "$match_path" ]; then
+		echo "No worktree matching '$name' found."
+		return 1
+	fi
+	echo "Removing worktree at: $match_path"
+	git worktree remove "$match_path"
 }
 
 add_worktree() {
@@ -157,6 +178,9 @@ current)
 	;;
 add)
 	add_worktree "${args[1]}"
+	;;
+remove)
+	remove_worktree "${args[1]}"
 	;;
 *)
 	if [[ "$is_interactive" == true ]]; then
