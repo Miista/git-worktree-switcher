@@ -28,6 +28,7 @@ function Show-Help {
     Write-Host '  . .\wt.ps1 version          show the CLI version.'
     Write-Host '  . .\wt.ps1 help             show this help message.'
     Write-Host '  . .\wt.ps1 -                switch to the main (first) worktree.'
+    Write-Host '  . .\wt.ps1 current          show the current worktree.'
 }
 
 function Get-WorktreeList {
@@ -60,6 +61,18 @@ function Get-ParsedWorktrees {
     if ($current) { $worktrees += $current }
 
     return $worktrees
+}
+
+function Show-CurrentWorktree {
+    $worktrees = Get-ParsedWorktrees
+    $pwd = (Get-Location).Path
+    $match = $worktrees | Where-Object { $pwd -eq $_.Path -or $pwd.StartsWith($_.Path + [System.IO.Path]::DirectorySeparatorChar) } | Select-Object -Last 1
+    if ($match) {
+        Write-Host "Current worktree: $($match.Path) [$($match.Branch)]"
+    }
+    else {
+        Write-Host "Not inside any known worktree."
+    }
 }
 
 function Invoke-GotoMain {
@@ -141,6 +154,7 @@ switch ($Command) {
     'help'    { Show-Help }
     'version' { Write-Host "Version: $VERSION" }
     '-'       { Invoke-GotoMain }
+    'current' { Show-CurrentWorktree }
     'update'  { Invoke-Update }
     default   { Invoke-Switch $Command }
 }

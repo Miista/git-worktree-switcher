@@ -115,6 +115,40 @@ Describe 'wt.ps1' {
         }
     }
 
+    Describe 'Show current worktree (unit, mocked git)' {
+        BeforeAll {
+            . $ScriptPath -Command '__noop__'
+        }
+
+        BeforeEach {
+            Mock git {
+                @(
+                    'worktree /repo/main',
+                    'HEAD abc123',
+                    'branch refs/heads/main',
+                    '',
+                    'worktree /repo/feature-foo',
+                    'HEAD def456',
+                    'branch refs/heads/feature-foo',
+                    ''
+                )
+            }
+            Mock Write-Host {}
+        }
+
+        It 'prints the worktree whose path matches $PWD' {
+            Mock Get-Location { [pscustomobject]@{ Path = '/repo/feature-foo' } }
+            Show-CurrentWorktree
+            Should -Invoke Write-Host -ParameterFilter { $Object -match 'feature-foo' }
+        }
+
+        It 'prints a message when $PWD does not match any worktree' {
+            Mock Get-Location { [pscustomobject]@{ Path = '/some/other/path' } }
+            Show-CurrentWorktree
+            Should -Invoke Write-Host -ParameterFilter { $Object -match 'not inside' }
+        }
+    }
+
     Describe 'Interactive mode without fzf' {
         BeforeAll {
             . $ScriptPath -Command '__noop__'

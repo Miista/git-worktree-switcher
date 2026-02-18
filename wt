@@ -43,6 +43,29 @@ help_message() {
 	echo -e "\twt update: update to the latest release of worktree switcher."
 	echo -e "\twt version: show the CLI version."
 	echo -e "\twt help: shows this help message."
+	echo -e "\twt current: show the current worktree."
+}
+
+current_worktree() {
+	current_path=$(pwd)
+	main_worktree=""
+	while IFS= read -r line; do
+		case "$line" in
+			worktree\ *)
+				wt_path="${line#worktree }"
+				;;
+			branch\ *)
+				branch="${line#branch refs/heads/}"
+				;;
+			"")
+				if [[ "$current_path" == "$wt_path" || "$current_path" == "$wt_path/"* ]]; then
+					echo "Current worktree: $wt_path [$branch]"
+					return
+				fi
+				;;
+		esac
+	done < <(git worktree list --porcelain)
+	echo "Not inside any known worktree."
 }
 
 goto_main_worktree() {
@@ -112,6 +135,9 @@ version)
 	;;
 -)
 	goto_main_worktree
+	;;
+current)
+	current_worktree
 	;;
 *)
 	if [[ "$is_interactive" == true ]]; then
