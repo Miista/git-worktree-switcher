@@ -80,7 +80,11 @@ add_worktree() {
 	parent_path=$(dirname "$main_path")
 	local worktree_path="$parent_path/$branch"
 	echo "Adding worktree '$branch' at: $worktree_path"
-	git worktree add "$worktree_path" "$branch"
+	if git rev-parse --verify "$branch" &>/dev/null; then
+		git worktree add "$worktree_path" "$branch"
+	else
+		git worktree add -b "$branch" "$worktree_path"
+	fi
 }
 
 current_worktree() {

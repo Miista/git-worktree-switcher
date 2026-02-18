@@ -122,8 +122,16 @@ function Invoke-AddWorktree([string]$Branch) {
     $mainPath = $worktrees[0].Path
     $parentPath = Split-Path $mainPath -Parent
     $worktreePath = Join-Path $parentPath $Branch
+
+    $branchExists = $true
+    try { git rev-parse --verify $Branch 2>$null | Out-Null } catch { $branchExists = $false }
+
     Write-Host "Adding worktree '$Branch' at: $worktreePath"
-    git worktree add $worktreePath $Branch
+    if ($branchExists) {
+        git worktree add $worktreePath $Branch
+    } else {
+        git worktree add -b $Branch $worktreePath
+    }
 }
 
 function Invoke-RemoveWorktree([string]$Name) {
