@@ -149,6 +149,11 @@ function Invoke-RemoveWorktree([string]$Name) {
         Write-Host "No worktree matching '$Name' found."
         return
     }
+    $pwd = (Get-Location).Path
+    if ($pwd -eq $match.Path -or $pwd.StartsWith($match.Path + [System.IO.Path]::DirectorySeparatorChar)) {
+        Write-Host "Cannot remove the current worktree. Switch to a different worktree first."
+        return
+    }
     Write-Host "Removing worktree at: $($match.Path)"
     git worktree remove $match.Path
 }

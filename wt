@@ -64,6 +64,12 @@ remove_worktree() {
 		echo "No worktree matching '$name' found."
 		return 1
 	fi
+	local current_path
+	current_path=$(pwd)
+	if [[ "$current_path" == "$match_path" || "$current_path" == "$match_path/"* ]]; then
+		echo "Cannot remove the current worktree. Switch to a different worktree first."
+		return 1
+	fi
 	echo "Removing worktree at: $match_path"
 	git worktree remove "$match_path"
 }
