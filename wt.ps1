@@ -30,6 +30,7 @@ function Show-Help {
     Write-Host '  . .\wt.ps1 help             show this help message.'
     Write-Host '  . .\wt.ps1 -                switch to the main (first) worktree.'
     Write-Host '  . .\wt.ps1 current          show the current worktree.'
+    Write-Host '  . .\wt.ps1 add <branch>     add a new worktree for <branch> as a sibling folder.'
 }
 
 function Get-WorktreeList {
@@ -169,6 +170,7 @@ switch ($Command) {
     'version' { Write-Host "Version: $VERSION" }
     '-'       { Invoke-GotoMain }
     'current' { Show-CurrentWorktree }
+    'add'     { Invoke-AddWorktree $Arg }
     'update'  { Invoke-Update }
     default   { Invoke-Switch $Command }
 }
