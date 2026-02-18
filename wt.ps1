@@ -123,8 +123,8 @@ function Invoke-AddWorktree([string]$Branch) {
     $parentPath = Split-Path $mainPath -Parent
     $worktreePath = Join-Path $parentPath $Branch
 
-    $branchExists = $true
-    try { git rev-parse --verify $Branch 2>$null | Out-Null } catch { $branchExists = $false }
+    git rev-parse --verify $Branch 2>$null | Out-Null
+    $branchExists = $LASTEXITCODE -eq 0
 
     Write-Host "Adding worktree '$Branch' at: $worktreePath"
     if ($branchExists) {
