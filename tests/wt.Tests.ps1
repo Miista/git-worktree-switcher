@@ -180,6 +180,25 @@ Describe 'wt.ps1' {
             }
         }
 
+        It 'works correctly when there is only one worktree (no trailing blank line in porcelain)' {
+            Mock git {
+                @(
+                    'worktree /repo/main',
+                    'HEAD abc123',
+                    'branch refs/heads/main'
+                )
+            } -ParameterFilter { $args[0] -eq 'worktree' -and $args[1] -eq 'list' }
+
+            Invoke-AddWorktree 'feature-bar'
+
+            Should -Invoke git -ParameterFilter {
+                $args[0] -eq 'worktree' -and
+                $args[1] -eq 'add' -and
+                $args[2] -eq '/repo/feature-bar' -and
+                $args[3] -eq 'feature-bar'
+            }
+        }
+
         It 'prints an error and does nothing when no branch name is given' {
             Invoke-AddWorktree ''
             Should -Invoke Write-Host -ParameterFilter { $Object -match 'branch' }
