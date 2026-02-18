@@ -149,6 +149,44 @@ Describe 'wt.ps1' {
         }
     }
 
+    Describe 'Add worktree (unit, mocked git)' {
+        BeforeAll {
+            . $ScriptPath -Command '__noop__'
+        }
+
+        BeforeEach {
+            Mock git {}
+            Mock Write-Host {}
+        }
+
+        It 'calls git worktree add with a sibling path derived from the branch name' {
+            # Main worktree is at /repo/main — sibling folder should be /repo/feature-bar
+            Mock git {
+                @(
+                    'worktree /repo/main',
+                    'HEAD abc123',
+                    'branch refs/heads/main',
+                    ''
+                )
+            } -ParameterFilter { $args[0] -eq 'worktree' -and $args[1] -eq 'list' }
+
+            Invoke-AddWorktree 'feature-bar'
+
+            Should -Invoke git -ParameterFilter {
+                $args[0] -eq 'worktree' -and
+                $args[1] -eq 'add' -and
+                $args[2] -eq '/repo/feature-bar' -and
+                $args[3] -eq 'feature-bar'
+            }
+        }
+
+        It 'prints an error and does nothing when no branch name is given' {
+            Invoke-AddWorktree ''
+            Should -Invoke Write-Host -ParameterFilter { $Object -match 'branch' }
+            Should -Invoke git -Times 0 -ParameterFilter { $args[0] -eq 'worktree' -and $args[1] -eq 'add' }
+        }
+    }
+
     Describe 'Interactive mode without fzf' {
         BeforeAll {
             . $ScriptPath -Command '__noop__'

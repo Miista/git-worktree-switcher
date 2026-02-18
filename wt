@@ -44,6 +44,22 @@ help_message() {
 	echo -e "\twt version: show the CLI version."
 	echo -e "\twt help: shows this help message."
 	echo -e "\twt current: show the current worktree."
+	echo -e "\twt add <branch>: add a new worktree for <branch> as a sibling folder."
+}
+
+add_worktree() {
+	local branch="$1"
+	if [ -z "$branch" ]; then
+		echo "Usage: wt add <branch-name>"
+		return 1
+	fi
+	local main_path
+	main_path=$(git worktree list --porcelain | awk 'NR==1{print $2}')
+	local parent_path
+	parent_path=$(dirname "$main_path")
+	local worktree_path="$parent_path/$branch"
+	echo "Adding worktree '$branch' at: $worktree_path"
+	git worktree add "$worktree_path" "$branch"
 }
 
 current_worktree() {
@@ -138,6 +154,9 @@ version)
 	;;
 current)
 	current_worktree
+	;;
+add)
+	add_worktree "${args[1]}"
 	;;
 *)
 	if [[ "$is_interactive" == true ]]; then
