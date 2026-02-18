@@ -4,6 +4,8 @@ Switch between git worktrees with speed. :zap:
 <img src = "https://i.imgur.com/nPdneDT.gif" width="600" alt="demo of switching between git worktrees" />
 
 ## Installation
+
+### Linux / macOS (bash/zsh/fish)
 Download the script from the [Release section](https://github.com/yankeexe/git-worktree-switcher/releases).
 
 Make the script executable.
@@ -16,6 +18,36 @@ Copy the executable to any directory in your `$PATH`
 
 ```bash
 $ sudo cp wt /usr/local/bin
+```
+
+### PowerShell / Windows
+
+**Dependencies:** PowerShell 5.1+, git, [fzf](https://github.com/junegunn/fzf) (optional, for `-i`)
+
+Download `wt.ps1` from the [Release section](https://github.com/yankeexe/git-worktree-switcher/releases) and place it somewhere convenient (e.g. `C:\Tools\wt.ps1`).
+
+Because PowerShell scripts cannot change the calling shell's working directory when run as a subprocess, `wt.ps1` must be **dot-sourced**:
+
+```powershell
+. .\wt.ps1 <worktree-name>
+```
+
+**Recommended: add a wrapper to your `$PROFILE`** so you can call `wt` directly:
+
+```powershell
+# In $PROFILE (e.g. ~\Documents\PowerShell\Microsoft.PowerShell_profile.ps1)
+function wt { . "C:\Tools\wt.ps1" @args }
+```
+
+After reloading your profile (`. $PROFILE`) you can use `wt` just like on Linux/macOS:
+
+```powershell
+wt <worktree-name>
+wt -i
+wt list
+wt -
+wt version
+wt help
 ```
 
 ## Tab Autocompletion :zap:
