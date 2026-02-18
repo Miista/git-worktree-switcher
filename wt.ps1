@@ -47,13 +47,13 @@ function Get-ParsedWorktrees {
 
     foreach ($line in $lines) {
         if ($line -match '^worktree (.+)$') {
-            $current = @{ Path = $Matches[1]; Head = ''; Branch = '' }
+            $current = @{ Path = $Matches[1].Trim(); Head = ''; Branch = '' }
         }
         elseif ($line -match '^HEAD (.+)$' -and $current) {
             $current.Head = $Matches[1]
         }
         elseif ($line -match '^branch (.+)$' -and $current) {
-            $current.Branch = ($Matches[1] -replace '^refs/heads/', '')
+            $current.Branch = ($Matches[1].Trim() -replace '^refs/heads/', '')
         }
         elseif ($line -eq '' -and $current) {
             $worktrees += $current
