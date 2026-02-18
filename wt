@@ -85,6 +85,11 @@ add_worktree() {
 	else
 		git worktree add -b "$branch" "$worktree_path"
 	fi
+	if [ $? -eq 0 ]; then
+		echo "Switching to worktree at: $worktree_path"
+		cd "$worktree_path"
+		exec $SHELL
+	fi
 }
 
 current_worktree() {

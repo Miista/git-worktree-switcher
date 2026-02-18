@@ -132,6 +132,10 @@ function Invoke-AddWorktree([string]$Branch) {
     } else {
         git worktree add -b $Branch $worktreePath
     }
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Switching to worktree at: $worktreePath"
+        Set-Location $worktreePath
+    }
 }
 
 function Invoke-RemoveWorktree([string]$Name) {
