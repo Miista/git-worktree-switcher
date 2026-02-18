@@ -10,28 +10,23 @@
 
 param(
     [Parameter(Position = 0)] [string]$Command,
-    [Parameter(Position = 1)] [string]$Arg,
-    [switch]$i
+    [Parameter(Position = 1)] [string]$Arg
 )
 
 $VERSION = '0.1.2'
-$RELEASE_URL = 'https://github.com/yankeexe/git-worktree-switcher/releases/latest'
-$RELEASE_API_URL = 'https://api.github.com/repos/yankeexe/git-worktree-switcher/releases/latest'
 
 function Show-Help {
     Write-Host 'wt lets you switch between your git worktrees with speed.'
     Write-Host ''
     Write-Host 'Usage:'
-    Write-Host '  . .\wt.ps1 <worktree-name>  search for worktree and change to that directory.'
-    Write-Host '  . .\wt.ps1 -i               interactively select a worktree using fzf.'
-    Write-Host '  . .\wt.ps1 list             list out all the git worktrees.'
-    Write-Host '  . .\wt.ps1 update           update to the latest release of worktree switcher.'
-    Write-Host '  . .\wt.ps1 version          show the CLI version.'
-    Write-Host '  . .\wt.ps1 help             show this help message.'
-    Write-Host '  . .\wt.ps1 -                switch to the main (first) worktree.'
-    Write-Host '  . .\wt.ps1 current          show the current worktree.'
-    Write-Host '  . .\wt.ps1 add <branch>     add a new worktree for <branch> as a sibling folder.'
-    Write-Host '  . .\wt.ps1 remove <branch>  remove the worktree matching <branch>.'
+    Write-Host '  wt <worktree-name>  search for worktree and change to that directory.'
+    Write-Host '  wt list             list out all the git worktrees.'
+    Write-Host '  wt version          show the CLI version.'
+    Write-Host '  wt help             show this help message.'
+    Write-Host '  wt -                switch to the main (first) worktree.'
+    Write-Host '  wt current          show the current worktree.'
+    Write-Host '  wt add <branch>     add a new worktree for <branch> as a sibling folder.'
+    Write-Host '  wt remove <branch>  remove the worktree matching <branch>.'
 }
 
 function Get-WorktreeList {
@@ -96,23 +91,6 @@ function Invoke-Switch([string]$Name) {
     }
 }
 
-function Invoke-InteractiveSwitch {
-    if (-not (Get-Command fzf -ErrorAction SilentlyContinue)) {
-        Write-Host 'Error: fzf is not installed for interactive mode'
-        Write-Host 'Install from: https://github.com/junegunn/fzf#installation'
-        return
-    }
-
-    $worktrees = Get-ParsedWorktrees
-    $lines = $worktrees | ForEach-Object { "$($_.Path) [$($_.Branch)]" }
-    $selected = $lines | fzf --query '' --height=10% --no-multi --exit-0
-    if ($selected) {
-        $path = ($selected -split ' \[')[0].Trim()
-        Write-Host "Changing to worktree at: $path"
-        Set-Location $path
-    }
-}
-
 function Invoke-AddWorktree([string]$Branch) {
     if (-not $Branch) {
         Write-Host 'Usage: wt add <branch-name>'
@@ -159,42 +137,9 @@ function Invoke-RemoveWorktree([string]$Name) {
     git worktree remove $match.Path
 }
 
-function Invoke-Update {
-    try {
-        $release = Invoke-RestMethod -Uri $RELEASE_API_URL -ErrorAction Stop
-        $fetchedVersion = $release.tag_name
-
-        if ($fetchedVersion -eq $VERSION) {
-            Write-Host "You have the latest version of worktree switcher!"
-            Write-Host "Version: $VERSION"
-        }
-        else {
-            $downloadUrl = $release.assets[0].browser_download_url
-            Write-Host "Downloading latest version $fetchedVersion"
-            $tmpPath = [System.IO.Path]::GetTempFileName()
-            Invoke-WebRequest -Uri $downloadUrl -OutFile $tmpPath -ErrorAction Stop
-            Write-Host "Update downloaded to: $tmpPath"
-            Write-Host "Please replace your wt.ps1 with the downloaded file, or visit:"
-            Write-Host $RELEASE_URL
-        }
-    }
-    catch {
-        Write-Host "Failed to check for updates: $_"
-        Write-Host "Visit: $RELEASE_URL"
-    }
-}
-
 # ---- Command dispatch ----
-# Early exit for __noop__ (used by tests to dot-source functions only)
-if ($Command -eq '__noop__') { return }
-
-if (-not $Command -and -not $i) {
+if (-not $Command) {
     Show-Help
-    return
-}
-
-if ($i) {
-    Invoke-InteractiveSwitch
     return
 }
 
@@ -206,6 +151,5 @@ switch ($Command) {
     'current' { Show-CurrentWorktree }
     'add'     { Invoke-AddWorktree $Arg }
     'remove'  { Invoke-RemoveWorktree $Arg }
-    'update'  { Invoke-Update }
     default   { Invoke-Switch $Command }
 }
