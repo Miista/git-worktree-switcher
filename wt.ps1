@@ -68,8 +68,8 @@ function Get-ParsedWorktrees {
 
 function Show-CurrentWorktree {
     $worktrees = Get-ParsedWorktrees
-    $pwd = (Get-Location).Path
-    $match = $worktrees | Where-Object { $pwd -eq $_.Path -or $pwd.StartsWith($_.Path + [System.IO.Path]::DirectorySeparatorChar) } | Select-Object -Last 1
+    $pwd = (Get-Location).Path.Replace('\', '/')
+    $match = $worktrees | Where-Object { $p = $_.Path.Replace('\', '/'); $pwd -eq $p -or $pwd.StartsWith($p + '/') } | Select-Object -Last 1
     if ($match) {
         Write-Host "Current worktree: $($match.Path) [$($match.Branch)]"
     }
@@ -149,8 +149,9 @@ function Invoke-RemoveWorktree([string]$Name) {
         Write-Host "No worktree matching '$Name' found."
         return
     }
-    $pwd = (Get-Location).Path
-    if ($pwd -eq $match.Path -or $pwd.StartsWith($match.Path + [System.IO.Path]::DirectorySeparatorChar)) {
+    $pwd = (Get-Location).Path.Replace('\', '/')
+    $matchPath = $match.Path.Replace('\', '/')
+    if ($pwd -eq $matchPath -or $pwd.StartsWith($matchPath + '/')) {
         Write-Host "Cannot remove the current worktree. Switch to a different worktree first."
         return
     }
