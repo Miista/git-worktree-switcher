@@ -11,7 +11,9 @@
 param(
     [Parameter(Position = 0)] [string]$Command,
     [Parameter(Position = 1)] [string]$Arg,
-    [switch]$i
+    [switch]$i,
+    [switch]$h,
+    [switch]$help
 )
 
 $VERSION = '0.1.2'
@@ -26,6 +28,7 @@ function Show-Help {
     Write-Host '  wt list             list out all the git worktrees.'
     Write-Host '  wt version          show the CLI version.'
     Write-Host '  wt help             show this help message.'
+    Write-Host '  wt -h, --help       show this help message.'
     Write-Host '  wt -                switch to the main (first) worktree.'
     Write-Host '  wt current          show the current worktree.'
     Write-Host '  wt add <branch>     add a new worktree for <branch> as a sibling folder.'
@@ -159,6 +162,11 @@ function Invoke-InteractiveSwitch {
 }
 
 # ---- Command dispatch ----
+if ($h -or $help) {
+    Show-Help
+    return
+}
+
 if (-not $Command -and -not $i) {
     if (Get-Command fzf -ErrorAction SilentlyContinue) {
         Invoke-InteractiveSwitch
