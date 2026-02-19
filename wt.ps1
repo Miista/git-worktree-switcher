@@ -16,7 +16,7 @@ param(
     [switch]$help
 )
 
-$VERSION = '0.1.2'
+$VERSION = '0.1.3'
 
 function Show-Help {
     Write-Host 'wt lets you switch between your git worktrees with speed.'
