@@ -149,7 +149,8 @@ function Invoke-InteractiveSwitch {
 
     $worktrees = Get-ParsedWorktrees
     $lines = $worktrees | ForEach-Object { "$($_.Path) [$($_.Branch)]" }
-    $selected = $lines | fzf --query '' --height=10% --no-multi --exit-0
+    Write-Host $lines
+    $selected = $lines | fzf --height=10% --no-multi --exit-0
     if ($selected) {
         $path = ($selected -split ' \[')[0].Trim()
         Write-Host "Changing to worktree at: $path"
