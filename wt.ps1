@@ -20,6 +20,7 @@ function Show-Help {
     Write-Host 'wt lets you switch between your git worktrees with speed.'
     Write-Host ''
     Write-Host 'Usage:'
+    Write-Host '  wt                  interactively select a worktree using fzf (default).'
     Write-Host '  wt <worktree-name>  search for worktree and change to that directory.'
     Write-Host '  wt -i               interactively select a worktree using fzf.'
     Write-Host '  wt list             list out all the git worktrees.'
@@ -158,7 +159,11 @@ function Invoke-InteractiveSwitch {
 
 # ---- Command dispatch ----
 if (-not $Command -and -not $i) {
-    Show-Help
+    if (Get-Command fzf -ErrorAction SilentlyContinue) {
+        Invoke-InteractiveSwitch
+    } else {
+        Show-Help
+    }
     return
 }
 

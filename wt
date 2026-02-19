@@ -37,6 +37,7 @@ worktree_list() {
 help_message() {
 	echo -e "wt lets you switch between your git worktrees with speed.\n"
 	echo "Usage:"
+	echo -e "\twt: interactively select a worktree using fzf (default)."
 	echo -e "\twt <worktree-name>: search for worktree names and change to that directory."
 	echo -e "\twt -i: interactively select a worktree using fzf."
 	echo -e "\twt list: list out all the git worktrees."
@@ -169,8 +170,12 @@ update() {
 
 
 if [ -z "${args[0]}" ]; then
-	help_message
-	exit 0
+	if command -v fzf &> /dev/null; then
+		is_interactive=true
+	else
+		help_message
+		exit 0
+	fi
 fi
 
 case "${args[0]}" in
