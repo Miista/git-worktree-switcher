@@ -157,9 +157,6 @@ function Invoke-InteractiveSwitch {
 }
 
 # ---- Command dispatch ----
-# Early exit for __noop__ (used by tests to dot-source functions only)
-if ($Command -eq '__noop__') { return }
-
 if (-not $Command -and -not $i) {
     Show-Help
     return
