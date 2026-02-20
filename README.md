@@ -129,3 +129,21 @@ Show the CLI version
 ```bash
 $ wt version
 ```
+
+Add a new worktree without switching to it
+
+```bash
+$ wt add <branch-name>
+```
+
+Create a new worktree and switch to it
+
+```bash
+$ wt create <branch-name>
+```
+
+Remove a worktree
+
+```bash
+$ wt remove <branch-name>
+```

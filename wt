@@ -46,6 +46,7 @@ help_message() {
 	echo -e "\twt help: shows this help message."
 	echo -e "\twt current: show the current worktree."
 	echo -e "\twt add <branch>: add a new worktree for <branch> as a sibling folder."
+	echo -e "\twt create <branch>: add a new worktree for <branch> and switch to it."
 	echo -e "\twt remove <branch>: remove the worktree matching <branch>."
 }
 
@@ -87,6 +88,25 @@ add_worktree() {
 	parent_path=$(dirname "$main_path")
 	local worktree_path="$parent_path/$branch"
 	echo "Adding worktree '$branch' at: $worktree_path"
+	if git rev-parse --verify "$branch" &>/dev/null; then
+		git worktree add "$worktree_path" "$branch"
+	else
+		git worktree add -b "$branch" "$worktree_path"
+	fi
+}
+
+create_worktree() {
+	local branch="$1"
+	if [ -z "$branch" ]; then
+		echo "Usage: wt create <branch-name>"
+		return 1
+	fi
+	local main_path
+	main_path=$(git worktree list --porcelain | awk 'NR==1{print $2}')
+	local parent_path
+	parent_path=$(dirname "$main_path")
+	local worktree_path="$parent_path/$branch"
+	echo "Creating worktree '$branch' at: $worktree_path"
 	if git rev-parse --verify "$branch" &>/dev/null; then
 		git worktree add "$worktree_path" "$branch"
 	else
@@ -199,6 +219,9 @@ current)
 	;;
 add)
 	add_worktree "${args[1]}"
+	;;
+create)
+	create_worktree "${args[1]}"
 	;;
 remove)
 	remove_worktree "${args[1]}"

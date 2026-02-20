@@ -32,6 +32,7 @@ function Show-Help {
     Write-Host '  wt -                switch to the main (first) worktree.'
     Write-Host '  wt current          show the current worktree.'
     Write-Host '  wt add <branch>     add a new worktree for <branch> as a sibling folder.'
+    Write-Host '  wt create <branch>  add a new worktree for <branch> and switch to it.'
     Write-Host '  wt remove <branch>  remove the worktree matching <branch>.'
 }
 
@@ -116,6 +117,27 @@ function Invoke-AddWorktree([string]$Branch) {
     } else {
         git worktree add -b $Branch $worktreePath
     }
+}
+
+function Invoke-CreateWorktree([string]$Branch) {
+    if (-not $Branch) {
+        Write-Host 'Usage: wt create <branch-name>'
+        return
+    }
+    $worktrees = Get-ParsedWorktrees
+    $mainPath = $worktrees[0].Path
+    $parentPath = Split-Path $mainPath -Parent
+    $worktreePath = Join-Path $parentPath $Branch
+
+    git rev-parse --verify $Branch 2>$null | Out-Null
+    $branchExists = $LASTEXITCODE -eq 0
+
+    Write-Host "Creating worktree '$Branch' at: $worktreePath"
+    if ($branchExists) {
+        git worktree add $worktreePath $Branch
+    } else {
+        git worktree add -b $Branch $worktreePath
+    }
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Switching to worktree at: $worktreePath"
         Set-Location $worktreePath
@@ -188,6 +210,7 @@ switch ($Command) {
     '-'       { Invoke-GotoMain }
     'current' { Show-CurrentWorktree }
     'add'     { Invoke-AddWorktree $Arg }
+    'create'  { Invoke-CreateWorktree $Arg }
     'remove'  { Invoke-RemoveWorktree $Arg }
     default   { Invoke-Switch $Command }
 }
