@@ -174,7 +174,6 @@ function Invoke-InteractiveSwitch {
 
     $worktrees = Get-ParsedWorktrees
     $lines = $worktrees | ForEach-Object { "$($_.Path) [$($_.Branch)]" }
-    Write-Host $lines
     $selected = $lines | fzf --height=10% --no-multi --exit-0
     if ($selected) {
         $path = ($selected -split ' \[')[0].Trim()
