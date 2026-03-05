@@ -11,10 +11,14 @@
 param(
     [Parameter(Position = 0)] [string]$Command,
     [Parameter(Position = 1)] [string]$Arg,
+    [Parameter(Position = 2)] [string]$ForceArg,
     [switch]$i,
     [switch]$h,
-    [switch]$help
+    [switch]$help,
+    [switch]$force
 )
+
+$isForce = $force.IsPresent -or $ForceArg -eq '--force' -or $ForceArg -eq '-force'
 
 $VERSION = '0.1.3'
 
@@ -31,9 +35,9 @@ function Show-Help {
     Write-Host '  wt -h, --help       show this help message.'
     Write-Host '  wt -                switch to the main (first) worktree.'
     Write-Host '  wt current          show the current worktree.'
-    Write-Host '  wt add <branch>     add a new worktree for <branch> as a sibling folder.'
-    Write-Host '  wt create <branch>  add a new worktree for <branch> and switch to it.'
-    Write-Host '  wt remove <branch>  remove the worktree matching <branch>.'
+    Write-Host '  wt add <branch> [--force]     add a new worktree for <branch> as a sibling folder.'
+    Write-Host '  wt create <branch> [--force]  add a new worktree for <branch> and switch to it.'
+    Write-Host '  wt remove <branch> [--force]  remove the worktree matching <branch>.'
 }
 
 function Get-WorktreeList {
@@ -98,9 +102,9 @@ function Invoke-Switch([string]$Name) {
     }
 }
 
-function Invoke-AddWorktree([string]$Branch) {
+function Invoke-AddWorktree([string]$Branch, [bool]$Force) {
     if (-not $Branch) {
-        Write-Host 'Usage: wt add <branch-name>'
+        Write-Host 'Usage: wt add <branch-name> [--force]'
         return
     }
     $worktrees = Get-ParsedWorktrees
@@ -112,16 +116,17 @@ function Invoke-AddWorktree([string]$Branch) {
     $branchExists = $LASTEXITCODE -eq 0
 
     Write-Host "Adding worktree '$Branch' at: $worktreePath"
+    $forceArg = if ($Force) { @('--force') } else { @() }
     if ($branchExists) {
-        git worktree add $worktreePath $Branch
+        git worktree add @forceArg $worktreePath $Branch
     } else {
-        git worktree add -b $Branch $worktreePath
+        git worktree add @forceArg -b $Branch $worktreePath
     }
 }
 
-function Invoke-CreateWorktree([string]$Branch) {
+function Invoke-CreateWorktree([string]$Branch, [bool]$Force) {
     if (-not $Branch) {
-        Write-Host 'Usage: wt create <branch-name>'
+        Write-Host 'Usage: wt create <branch-name> [--force]'
         return
     }
     $worktrees = Get-ParsedWorktrees
@@ -133,10 +138,11 @@ function Invoke-CreateWorktree([string]$Branch) {
     $branchExists = $LASTEXITCODE -eq 0
 
     Write-Host "Creating worktree '$Branch' at: $worktreePath"
+    $forceArg = if ($Force) { @('--force') } else { @() }
     if ($branchExists) {
-        git worktree add $worktreePath $Branch
+        git worktree add @forceArg $worktreePath $Branch
     } else {
-        git worktree add -b $Branch $worktreePath
+        git worktree add @forceArg -b $Branch $worktreePath
     }
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Switching to worktree at: $worktreePath"
@@ -144,9 +150,9 @@ function Invoke-CreateWorktree([string]$Branch) {
     }
 }
 
-function Invoke-RemoveWorktree([string]$Name) {
+function Invoke-RemoveWorktree([string]$Name, [bool]$Force) {
     if (-not $Name) {
-        Write-Host 'Usage: wt remove <branch-name>'
+        Write-Host 'Usage: wt remove <branch-name> [--force]'
         return
     }
     $worktrees = Get-ParsedWorktrees
@@ -162,7 +168,11 @@ function Invoke-RemoveWorktree([string]$Name) {
         return
     }
     Write-Host "Removing worktree at: $($match.Path)"
-    git worktree remove $match.Path
+    if ($Force) {
+        git worktree remove --force $match.Path
+    } else {
+        git worktree remove $match.Path
+    }
 }
 
 function Invoke-InteractiveSwitch {
@@ -208,8 +218,8 @@ switch ($Command) {
     'version' { Write-Host "Version: $VERSION" }
     '-'       { Invoke-GotoMain }
     'current' { Show-CurrentWorktree }
-    'add'     { Invoke-AddWorktree $Arg }
-    'create'  { Invoke-CreateWorktree $Arg }
-    'remove'  { Invoke-RemoveWorktree $Arg }
+    'add'     { Invoke-AddWorktree $Arg $isForce }
+    'create'  { Invoke-CreateWorktree $Arg $isForce }
+    'remove'  { Invoke-RemoveWorktree $Arg $isForce }
     default   { Invoke-Switch $Command }
 }

@@ -45,15 +45,16 @@ help_message() {
 	echo -e "\twt version: show the CLI version."
 	echo -e "\twt help: shows this help message."
 	echo -e "\twt current: show the current worktree."
-	echo -e "\twt add <branch>: add a new worktree for <branch> as a sibling folder."
-	echo -e "\twt create <branch>: add a new worktree for <branch> and switch to it."
-	echo -e "\twt remove <branch>: remove the worktree matching <branch>."
+	echo -e "\twt add <branch> [--force]: add a new worktree for <branch> as a sibling folder."
+	echo -e "\twt create <branch> [--force]: add a new worktree for <branch> and switch to it."
+	echo -e "\twt remove <branch> [--force]: remove the worktree matching <branch>."
 }
 
 remove_worktree() {
 	local name="$1"
+	local force="$2"
 	if [ -z "$name" ]; then
-		echo "Usage: wt remove <branch-name>"
+		echo "Usage: wt remove <branch-name> [--force]"
 		return 1
 	fi
 	local match_path
@@ -73,13 +74,18 @@ remove_worktree() {
 		return 1
 	fi
 	echo "Removing worktree at: $match_path"
-	git worktree remove "$match_path"
+	if [ "$force" == "--force" ]; then
+		git worktree remove --force "$match_path"
+	else
+		git worktree remove "$match_path"
+	fi
 }
 
 add_worktree() {
 	local branch="$1"
+	local force="$2"
 	if [ -z "$branch" ]; then
-		echo "Usage: wt add <branch-name>"
+		echo "Usage: wt add <branch-name> [--force]"
 		return 1
 	fi
 	local main_path
@@ -88,17 +94,20 @@ add_worktree() {
 	parent_path=$(dirname "$main_path")
 	local worktree_path="$parent_path/$branch"
 	echo "Adding worktree '$branch' at: $worktree_path"
+	local force_flag=""
+	[ "$force" == "--force" ] && force_flag="--force"
 	if git rev-parse --verify "$branch" &>/dev/null; then
-		git worktree add "$worktree_path" "$branch"
+		git worktree add $force_flag "$worktree_path" "$branch"
 	else
-		git worktree add -b "$branch" "$worktree_path"
+		git worktree add $force_flag -b "$branch" "$worktree_path"
 	fi
 }
 
 create_worktree() {
 	local branch="$1"
+	local force="$2"
 	if [ -z "$branch" ]; then
-		echo "Usage: wt create <branch-name>"
+		echo "Usage: wt create <branch-name> [--force]"
 		return 1
 	fi
 	local main_path
@@ -107,10 +116,12 @@ create_worktree() {
 	parent_path=$(dirname "$main_path")
 	local worktree_path="$parent_path/$branch"
 	echo "Creating worktree '$branch' at: $worktree_path"
+	local force_flag=""
+	[ "$force" == "--force" ] && force_flag="--force"
 	if git rev-parse --verify "$branch" &>/dev/null; then
-		git worktree add "$worktree_path" "$branch"
+		git worktree add $force_flag "$worktree_path" "$branch"
 	else
-		git worktree add -b "$branch" "$worktree_path"
+		git worktree add $force_flag -b "$branch" "$worktree_path"
 	fi
 	if [ $? -eq 0 ]; then
 		echo "Switching to worktree at: $worktree_path"
@@ -218,13 +229,13 @@ current)
 	current_worktree
 	;;
 add)
-	add_worktree "${args[1]}"
+	add_worktree "${args[1]}" "${args[2]}"
 	;;
 create)
-	create_worktree "${args[1]}"
+	create_worktree "${args[1]}" "${args[2]}"
 	;;
 remove)
-	remove_worktree "${args[1]}"
+	remove_worktree "${args[1]}" "${args[2]}"
 	;;
 *)
 	if [[ "$is_interactive" == true ]]; then
