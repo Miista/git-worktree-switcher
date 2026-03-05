@@ -38,6 +38,7 @@ function Show-Help {
     Write-Host '  wt add <branch> [--force]     add a new worktree for <branch> as a sibling folder.'
     Write-Host '  wt create <branch> [--force]  add a new worktree for <branch> and switch to it.'
     Write-Host '  wt remove <branch> [--force]  remove the worktree matching <branch>.'
+    Write-Host '  wt delete <branch> [--force]  remove the worktree and delete the branch.'
 }
 
 function Get-WorktreeList {
@@ -150,6 +151,46 @@ function Invoke-CreateWorktree([string]$Branch, [bool]$Force) {
     }
 }
 
+function Invoke-DeleteWorktree([string]$Name, [bool]$Force) {
+    if (-not $Name) {
+        Write-Host 'Usage: wt delete <branch-name> [--force]'
+        return
+    }
+    $worktrees = Get-ParsedWorktrees
+    $match = $worktrees | Where-Object { $_.Path -match [regex]::Escape($Name) -or $_.Branch -match [regex]::Escape($Name) } | Select-Object -First 1
+    if (-not $match) {
+        Write-Host "No worktree matching '$Name' found."
+        return
+    }
+    $pwd = (Get-Location).Path.Replace('\', '/')
+    $matchPath = $match.Path.Replace('\', '/')
+    if ($pwd -eq $matchPath -or $pwd.StartsWith($matchPath + '/')) {
+        Write-Host "Cannot delete the current worktree. Switch to a different worktree first."
+        return
+    }
+    $removeOk = $false
+    if (Test-Path $match.Path) {
+        Write-Host "Removing worktree at: $($match.Path)"
+        if ($Force) {
+            git worktree remove --force $match.Path
+        } else {
+            git worktree remove $match.Path
+        }
+        $removeOk = $LASTEXITCODE -eq 0
+    } else {
+        git worktree prune
+        $removeOk = $true
+    }
+    if ($removeOk -and $match.Branch) {
+        Write-Host "Deleting branch: $($match.Branch)"
+        if ($Force) {
+            git branch -D $match.Branch
+        } else {
+            git branch -d $match.Branch
+        }
+    }
+}
+
 function Invoke-RemoveWorktree([string]$Name, [bool]$Force) {
     if (-not $Name) {
         Write-Host 'Usage: wt remove <branch-name> [--force]'
@@ -221,5 +262,6 @@ switch ($Command) {
     'add'     { Invoke-AddWorktree $Arg $isForce }
     'create'  { Invoke-CreateWorktree $Arg $isForce }
     'remove'  { Invoke-RemoveWorktree $Arg $isForce }
+    'delete'  { Invoke-DeleteWorktree $Arg $isForce }
     default   { Invoke-Switch $Command }
 }

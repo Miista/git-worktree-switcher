@@ -48,6 +48,7 @@ help_message() {
 	echo -e "\twt add <branch> [--force]: add a new worktree for <branch> as a sibling folder."
 	echo -e "\twt create <branch> [--force]: add a new worktree for <branch> and switch to it."
 	echo -e "\twt remove <branch> [--force]: remove the worktree matching <branch>."
+	echo -e "\twt delete <branch> [--force]: remove the worktree and delete the branch."
 }
 
 remove_worktree() {
@@ -78,6 +79,52 @@ remove_worktree() {
 		git worktree remove --force "$match_path"
 	else
 		git worktree remove "$match_path"
+	fi
+}
+
+delete_worktree() {
+	local name="$1"
+	local force="$2"
+	if [ -z "$name" ]; then
+		echo "Usage: wt delete <branch-name> [--force]"
+		return 1
+	fi
+	local match_path match_branch
+	eval "$(git worktree list --porcelain | awk -v name="$name" '
+		/^worktree / { path = substr($0, 10) }
+		/^branch /   { branch = substr($0, 8); sub("^refs/heads/", "", branch) }
+		/^$/         { if (path ~ name || branch ~ name) { print "match_path=" path "\nmatch_branch=" branch; exit } }
+	')"
+	if [ -z "$match_path" ]; then
+		echo "No worktree matching '$name' found."
+		return 1
+	fi
+	local current_path
+	current_path=$(pwd)
+	if [[ "$current_path" == "$match_path" || "$current_path" == "$match_path/"* ]]; then
+		echo "Cannot delete the current worktree. Switch to a different worktree first."
+		return 1
+	fi
+	local remove_ok=0
+	if [ -d "$match_path" ]; then
+		echo "Removing worktree at: $match_path"
+		if [ "$force" == "--force" ]; then
+			git worktree remove --force "$match_path"
+		else
+			git worktree remove "$match_path"
+		fi
+		remove_ok=$?
+	else
+		git worktree prune
+		remove_ok=0
+	fi
+	if [ $remove_ok -eq 0 ] && [ -n "$match_branch" ]; then
+		echo "Deleting branch: $match_branch"
+		if [ "$force" == "--force" ]; then
+			git branch -D "$match_branch"
+		else
+			git branch -d "$match_branch"
+		fi
 	fi
 }
 
@@ -236,6 +283,9 @@ create)
 	;;
 remove)
 	remove_worktree "${args[1]}" "${args[2]}"
+	;;
+delete)
+	delete_worktree "${args[1]}" "${args[2]}"
 	;;
 *)
 	if [[ "$is_interactive" == true ]]; then
