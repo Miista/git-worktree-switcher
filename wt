@@ -145,6 +145,8 @@ add_worktree() {
 	[ "$force" == "--force" ] && force_flag="--force"
 	if git rev-parse --verify "$branch" &>/dev/null; then
 		git worktree add $force_flag "$worktree_path" "$branch"
+	elif git rev-parse --verify "origin/$branch" &>/dev/null; then
+		git worktree add $force_flag --track -b "$branch" "$worktree_path" "origin/$branch"
 	else
 		git worktree add $force_flag -b "$branch" "$worktree_path"
 	fi
@@ -167,6 +169,8 @@ create_worktree() {
 	[ "$force" == "--force" ] && force_flag="--force"
 	if git rev-parse --verify "$branch" &>/dev/null; then
 		git worktree add $force_flag "$worktree_path" "$branch"
+	elif git rev-parse --verify "origin/$branch" &>/dev/null; then
+		git worktree add $force_flag --track -b "$branch" "$worktree_path" "origin/$branch"
 	else
 		git worktree add $force_flag -b "$branch" "$worktree_path"
 	fi

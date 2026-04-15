@@ -118,8 +118,13 @@ function Invoke-AddWorktree([string]$Branch, [bool]$Force) {
 
     Write-Host "Adding worktree '$Branch' at: $worktreePath"
     $forceArg = if ($Force) { @('--force') } else { @() }
+    git rev-parse --verify "origin/$Branch" 2>$null | Out-Null
+    $remoteBranchExists = $LASTEXITCODE -eq 0
+
     if ($branchExists) {
         git worktree add @forceArg $worktreePath $Branch
+    } elseif ($remoteBranchExists) {
+        git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch"
     } else {
         git worktree add @forceArg -b $Branch $worktreePath
     }
@@ -140,8 +145,13 @@ function Invoke-CreateWorktree([string]$Branch, [bool]$Force) {
 
     Write-Host "Creating worktree '$Branch' at: $worktreePath"
     $forceArg = if ($Force) { @('--force') } else { @() }
+    git rev-parse --verify "origin/$Branch" 2>$null | Out-Null
+    $remoteBranchExists = $LASTEXITCODE -eq 0
+
     if ($branchExists) {
         git worktree add @forceArg $worktreePath $Branch
+    } elseif ($remoteBranchExists) {
+        git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch"
     } else {
         git worktree add @forceArg -b $Branch $worktreePath
     }
