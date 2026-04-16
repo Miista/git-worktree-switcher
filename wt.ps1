@@ -113,18 +113,18 @@ function Invoke-AddWorktree([string]$Branch, [bool]$Force) {
     $parentPath = Split-Path $mainPath -Parent
     $worktreePath = Join-Path $parentPath $Branch
 
-    git rev-parse --verify $Branch 2>$null | Out-Null
-    $branchExists = $LASTEXITCODE -eq 0
-
     Write-Host "Adding worktree '$Branch' at: $worktreePath"
     $forceArg = if ($Force) { @('--force') } else { @() }
     git rev-parse --verify "origin/$Branch" 2>$null | Out-Null
     $remoteBranchExists = $LASTEXITCODE -eq 0
 
-    if ($branchExists) {
-        git worktree add @forceArg $worktreePath $Branch
-    } elseif ($remoteBranchExists) {
+    git rev-parse --verify $Branch 2>$null | Out-Null
+    $branchExists = $LASTEXITCODE -eq 0
+
+    if ($remoteBranchExists) {
         git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch"
+    } elseif ($branchExists) {
+        git worktree add @forceArg $worktreePath $Branch
     } else {
         git worktree add @forceArg -b $Branch $worktreePath
     }
@@ -140,18 +140,18 @@ function Invoke-CreateWorktree([string]$Branch, [bool]$Force) {
     $parentPath = Split-Path $mainPath -Parent
     $worktreePath = Join-Path $parentPath $Branch
 
-    git rev-parse --verify $Branch 2>$null | Out-Null
-    $branchExists = $LASTEXITCODE -eq 0
-
     Write-Host "Creating worktree '$Branch' at: $worktreePath"
     $forceArg = if ($Force) { @('--force') } else { @() }
     git rev-parse --verify "origin/$Branch" 2>$null | Out-Null
     $remoteBranchExists = $LASTEXITCODE -eq 0
 
-    if ($branchExists) {
-        git worktree add @forceArg $worktreePath $Branch
-    } elseif ($remoteBranchExists) {
+    git rev-parse --verify $Branch 2>$null | Out-Null
+    $branchExists = $LASTEXITCODE -eq 0
+
+    if ($remoteBranchExists) {
         git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch"
+    } elseif ($branchExists) {
+        git worktree add @forceArg $worktreePath $Branch
     } else {
         git worktree add @forceArg -b $Branch $worktreePath
     }
