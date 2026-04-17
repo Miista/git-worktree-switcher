@@ -64,8 +64,8 @@ help_message() {
 	echo -e "\twt current: show the current worktree."
 	echo -e "\twt add <branch> [--force]: add a new worktree for <branch> as a sibling folder."
 	echo -e "\twt create <branch> [--force]: add a new worktree for <branch> and switch to it."
-	echo -e "\twt rm <branch> [--force]: remove the worktree matching <branch>."
-	echo -e "\twt done [branch]: safely clean up a worktree after all changes are pushed."
+	echo -e "\twt rm <worktree-name> [--force]: remove the worktree matching <worktree-name>."
+	echo -e "\twt done [worktree-name]: safely clean up a worktree after all changes are pushed."
 }
 
 rm_worktree() {
