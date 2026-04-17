@@ -29,6 +29,23 @@ for arg in "${args[@]}"; do
     fi
 done
 
+switch_worktree() {
+	local name="$1"
+	if [ -z "$name" ]; then
+		echo "Usage: wt <worktree-name>"
+		return 1
+	fi
+	local directory
+	directory=$(git worktree list --porcelain | grep -E 'worktree ' | awk '/'"$(echo "$name" | sed 's/\//\\\//g')"'/ {print; exit}' | cut -d ' ' -f2-)
+	if [ -z "$directory" ]; then
+		echo "No worktree matching '$name' found."
+		return 1
+	fi
+	echo "Changing to worktree at: $directory"
+	cd "$directory"
+	exec $SHELL
+}
+
 # show worktree list
 worktree_list() {
 	git worktree list
@@ -315,23 +332,13 @@ delete)
 		awk '/worktree/ {wt=$2} /branch/ {sub("refs/heads/", "", $2); print wt " [" $2 "]"}' |
 		fzf --query "" --height=10% --no-multi --exit-0 |
 		awk '{print $1}')
+		if [ -n "$directory" ]; then
+			echo "Changing to worktree at: $directory"
+			cd "$directory"
+			exec $SHELL
+		fi
 	else
-		directory=$(git worktree list --porcelain | grep -E 'worktree ' | awk '/'"$arg"'/ {print; exit}' | cut -d ' ' -f2-)
+		switch_worktree "${args[0]}"
 	fi
-
 	;;
 esac
-
-# Change worktree based on user argument.
-change_worktree() {
-	echo Changing to worktree at: "$directory"
-	cd "$directory"
-	exec $SHELL
-}
-
-# If directory variable is not empty then change worktree
-if [ -z "$directory" ]; then
-	:
-else
-	change_worktree
-fi
