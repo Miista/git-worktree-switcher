@@ -39,6 +39,7 @@ function Show-Help {
     Write-Host '  wt create <branch> [--force]  add a new worktree for <branch> and switch to it.'
     Write-Host '  wt rm <branch> [--force]  remove the worktree matching <branch>.'
     Write-Host '  wt delete <branch> [--force]  remove the worktree and delete the branch.'
+    Write-Host '  wt done <branch>             safely clean up a worktree after all changes are pushed.'
 }
 
 function Get-WorktreeList {
@@ -193,6 +194,54 @@ function Invoke-DeleteWorktree([string]$Name, [bool]$Force) {
     }
 }
 
+function Invoke-DoneWorktree([string]$Name) {
+    if (-not $Name) {
+        Write-Host 'Usage: wt done <branch-name>'
+        return
+    }
+    $worktrees = Get-ParsedWorktrees
+    $match = $worktrees | Where-Object { $_.Path -match [regex]::Escape($Name) -or $_.Branch -match [regex]::Escape($Name) } | Select-Object -First 1
+    if (-not $match) {
+        Write-Host "No worktree matching '$Name' found."
+        return
+    }
+    $pwd = (Get-Location).Path.Replace('\', '/')
+    $matchPath = $match.Path.Replace('\', '/')
+    if ($pwd -eq $matchPath -or $pwd.StartsWith($matchPath + '/')) {
+        Write-Host "Cannot clean up the current worktree. Switch to a different worktree first."
+        return
+    }
+    # check for uncommitted changes
+    $status = git -C $match.Path status --porcelain
+    if ($status) {
+        Write-Host "Worktree '$Name' has uncommitted changes:"
+        git -C $match.Path status --short
+        Write-Host ""
+        Write-Host "Commit or stash your changes first, then run 'wt done $Name' again."
+        return
+    }
+    # check for unpushed commits
+    $upstream = git -C $match.Path rev-parse --abbrev-ref "@{upstream}" 2>$null
+    if ($LASTEXITCODE -eq 0 -and $upstream) {
+        $unpushed = git -C $match.Path log "$upstream..HEAD" --oneline
+        if ($unpushed) {
+            Write-Host "Worktree '$Name' has unpushed commits:"
+            Write-Host $unpushed
+            Write-Host ""
+            Write-Host "Push your changes first with 'git push', then run 'wt done $Name' again."
+            return
+        }
+    } else {
+        # no upstream set
+        $branchName = git -C $match.Path rev-parse --abbrev-ref HEAD 2>$null
+        Write-Host "Branch '$branchName' has no upstream tracking branch."
+        Write-Host "Push your branch first with 'git push -u origin $branchName', then run 'wt done $Name' again."
+        return
+    }
+    # all clean — delete worktree and branch
+    Invoke-DeleteWorktree $Name $false
+}
+
 function Invoke-RmWorktree([string]$Name, [bool]$Force) {
     if (-not $Name) {
         Write-Host 'Usage: wt rm <branch-name> [--force]'
@@ -265,5 +314,6 @@ switch ($Command) {
     'create'  { Invoke-CreateWorktree $Arg $isForce }
     'rm'      { Invoke-RmWorktree $Arg $isForce }
     'delete'  { Invoke-DeleteWorktree $Arg $isForce }
+    'done'    { Invoke-DoneWorktree $Arg }
     default   { Invoke-Switch $Command }
 }
