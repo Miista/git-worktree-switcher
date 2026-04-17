@@ -135,7 +135,6 @@ add_worktree() {
 		echo "Usage: wt add <branch-name> [--force]"
 		return 1
 	fi
-	git fetch --quiet
 	local main_path
 	main_path=$(git worktree list --porcelain | awk 'NR==1{print $2}')
 	local parent_path
@@ -144,12 +143,21 @@ add_worktree() {
 	echo "Adding worktree '$branch' at: $worktree_path"
 	local force_flag=""
 	[ "$force" == "--force" ] && force_flag="--force"
+	# 1. check for remote branch
 	if git rev-parse --verify "origin/$branch" &>/dev/null; then
 		git worktree add $force_flag --track -b "$branch" "$worktree_path" "origin/$branch"
-	elif git rev-parse --verify "$branch" &>/dev/null; then
-		git worktree add $force_flag "$worktree_path" "$branch"
 	else
-		git worktree add $force_flag -b "$branch" "$worktree_path"
+		# 2. fetch and check for remote branch again
+		git fetch --quiet
+		if git rev-parse --verify "origin/$branch" &>/dev/null; then
+			git worktree add $force_flag --track -b "$branch" "$worktree_path" "origin/$branch"
+		# 3. check for local branch
+		elif git rev-parse --verify "$branch" &>/dev/null; then
+			git worktree add $force_flag "$worktree_path" "$branch"
+		# 4. create new local branch
+		else
+			git worktree add $force_flag -b "$branch" "$worktree_path"
+		fi
 	fi
 }
 
@@ -160,7 +168,6 @@ create_worktree() {
 		echo "Usage: wt create <branch-name> [--force]"
 		return 1
 	fi
-	git fetch --quiet
 	local main_path
 	main_path=$(git worktree list --porcelain | awk 'NR==1{print $2}')
 	local parent_path
@@ -169,12 +176,21 @@ create_worktree() {
 	echo "Creating worktree '$branch' at: $worktree_path"
 	local force_flag=""
 	[ "$force" == "--force" ] && force_flag="--force"
+	# 1. check for remote branch
 	if git rev-parse --verify "origin/$branch" &>/dev/null; then
 		git worktree add $force_flag --track -b "$branch" "$worktree_path" "origin/$branch"
-	elif git rev-parse --verify "$branch" &>/dev/null; then
-		git worktree add $force_flag "$worktree_path" "$branch"
 	else
-		git worktree add $force_flag -b "$branch" "$worktree_path"
+		# 2. fetch and check for remote branch again
+		git fetch --quiet
+		if git rev-parse --verify "origin/$branch" &>/dev/null; then
+			git worktree add $force_flag --track -b "$branch" "$worktree_path" "origin/$branch"
+		# 3. check for local branch
+		elif git rev-parse --verify "$branch" &>/dev/null; then
+			git worktree add $force_flag "$worktree_path" "$branch"
+		# 4. create new local branch
+		else
+			git worktree add $force_flag -b "$branch" "$worktree_path"
+		fi
 	fi
 	if [ $? -eq 0 ]; then
 		echo "Switching to worktree at: $worktree_path"
