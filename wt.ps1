@@ -108,6 +108,7 @@ function Invoke-AddWorktree([string]$Branch, [bool]$Force) {
         Write-Host 'Usage: wt add <branch-name> [--force]'
         return
     }
+    git fetch --quiet
     $worktrees = Get-ParsedWorktrees
     $mainPath = $worktrees[0].Path
     $parentPath = Split-Path $mainPath -Parent
@@ -135,6 +136,7 @@ function Invoke-CreateWorktree([string]$Branch, [bool]$Force) {
         Write-Host 'Usage: wt create <branch-name> [--force]'
         return
     }
+    git fetch --quiet
     $worktrees = Get-ParsedWorktrees
     $mainPath = $worktrees[0].Path
     $parentPath = Split-Path $mainPath -Parent

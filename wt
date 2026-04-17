@@ -135,6 +135,7 @@ add_worktree() {
 		echo "Usage: wt add <branch-name> [--force]"
 		return 1
 	fi
+	git fetch --quiet
 	local main_path
 	main_path=$(git worktree list --porcelain | awk 'NR==1{print $2}')
 	local parent_path
@@ -159,6 +160,7 @@ create_worktree() {
 		echo "Usage: wt create <branch-name> [--force]"
 		return 1
 	fi
+	git fetch --quiet
 	local main_path
 	main_path=$(git worktree list --porcelain | awk 'NR==1{print $2}')
 	local parent_path
