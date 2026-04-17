@@ -176,18 +176,24 @@ add_worktree() {
 	echo "Adding worktree '$branch' at: $worktree_path"
 	local force_flag=""
 	[ "$force" == "--force" ] && force_flag="--force"
-	# 1. check for remote branch
-	if git rev-parse --verify "origin/$branch" &>/dev/null; then
+	local branch_exists=false
+	git rev-parse --verify "$branch" &>/dev/null && branch_exists=true
+	local remote_exists=false
+	git rev-parse --verify "origin/$branch" &>/dev/null && remote_exists=true
+
+	# 1. check for remote branch (use local if it already exists)
+	if [[ "$remote_exists" == true && "$branch_exists" == true ]]; then
+		git worktree add $force_flag "$worktree_path" "$branch" --quiet
+	elif [[ "$remote_exists" == true ]]; then
 		git worktree add $force_flag --track -b "$branch" "$worktree_path" "origin/$branch" --quiet
+	elif [[ "$branch_exists" == true ]]; then
+		git worktree add $force_flag "$worktree_path" "$branch" --quiet
 	else
 		# 2. fetch and check for remote branch again
 		git fetch --quiet
 		if git rev-parse --verify "origin/$branch" &>/dev/null; then
 			git worktree add $force_flag --track -b "$branch" "$worktree_path" "origin/$branch" --quiet
-		# 3. check for local branch
-		elif git rev-parse --verify "$branch" &>/dev/null; then
-			git worktree add $force_flag "$worktree_path" "$branch" --quiet
-		# 4. create new local branch
+		# 3. create new local branch
 		else
 			git worktree add $force_flag -b "$branch" "$worktree_path" --quiet
 		fi

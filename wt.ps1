@@ -115,27 +115,28 @@ function Invoke-AddWorktree([string]$Branch, [bool]$Force) {
 
     Write-Host "Adding worktree '$Branch' at: $worktreePath"
     $forceArg = if ($Force) { @('--force') } else { @() }
+    git rev-parse --verify $Branch 2>$null | Out-Null
+    $branchExists = $LASTEXITCODE -eq 0
+
     # 1. check for remote branch
     git rev-parse --verify "origin/$Branch" 2>$null | Out-Null
     $remoteBranchExists = $LASTEXITCODE -eq 0
 
-    if ($remoteBranchExists) {
+    if ($remoteBranchExists -and $branchExists) {
+        git worktree add @forceArg $worktreePath $Branch --quiet
+    } elseif ($remoteBranchExists) {
         git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch" --quiet
+    } elseif ($branchExists) {
+        git worktree add @forceArg $worktreePath $Branch --quiet
     } else {
         # 2. fetch and check for remote branch again
         git fetch --quiet
         git rev-parse --verify "origin/$Branch" 2>$null | Out-Null
         $remoteBranchExists = $LASTEXITCODE -eq 0
 
-        # 3. check for local branch
-        git rev-parse --verify $Branch 2>$null | Out-Null
-        $branchExists = $LASTEXITCODE -eq 0
-
         if ($remoteBranchExists) {
             git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch" --quiet
-        } elseif ($branchExists) {
-            git worktree add @forceArg $worktreePath $Branch --quiet
-        # 4. create new local branch
+        # 3. create new local branch
         } else {
             git worktree add @forceArg -b $Branch $worktreePath --quiet
         }
