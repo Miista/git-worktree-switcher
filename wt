@@ -181,9 +181,24 @@ add_worktree() {
 	local remote_exists=false
 	git rev-parse --verify "origin/$branch" &>/dev/null && remote_exists=true
 
-	# 1. check for remote branch (use local if it already exists)
+	# 1. check for remote branch (use local if it already exists and tracks correctly)
 	if [[ "$remote_exists" == true && "$branch_exists" == true ]]; then
-		git worktree add $force_flag "$worktree_path" "$branch" --quiet
+		local upstream
+		upstream=$(git config "branch.$branch.remote" 2>/dev/null)
+		local merge_ref
+		merge_ref=$(git config "branch.$branch.merge" 2>/dev/null)
+		if [[ "$upstream" == "origin" && "$merge_ref" == "refs/heads/$branch" ]]; then
+			git worktree add $force_flag "$worktree_path" "$branch" --quiet
+		else
+			echo "Local branch '$branch' exists but does not track 'origin/$branch'."
+			if [ -n "$upstream" ] && [ -n "$merge_ref" ]; then
+				echo "It currently tracks '$upstream/$(echo "$merge_ref" | sed 's|refs/heads/||')'."
+			else
+				echo "It has no upstream tracking branch configured."
+			fi
+			echo "Fix with: git branch --set-upstream-to=origin/$branch $branch"
+			return 1
+		fi
 	elif [[ "$remote_exists" == true ]]; then
 		git worktree add $force_flag --track -b "$branch" "$worktree_path" "origin/$branch" --quiet
 	elif [[ "$branch_exists" == true ]]; then
