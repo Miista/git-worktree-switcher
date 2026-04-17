@@ -38,7 +38,7 @@ function Show-Help {
     Write-Host '  wt add <branch> [--force]     add a new worktree for <branch> as a sibling folder.'
     Write-Host '  wt create <branch> [--force]  add a new worktree for <branch> and switch to it.'
     Write-Host '  wt rm <branch> [--force]      remove the worktree matching <branch>.'
-    Write-Host '  wt done <branch>              safely clean up a worktree after all changes are pushed.'
+    Write-Host '  wt done [branch]              safely clean up a worktree after all changes are pushed.'
 }
 
 function Get-WorktreeList {
@@ -174,21 +174,41 @@ function Invoke-CreateWorktree([string]$Branch, [bool]$Force) {
 
 
 function Invoke-DoneWorktree([string]$Name) {
-    if (-not $Name) {
-        Write-Host 'Usage: wt done <branch-name>'
-        return
-    }
     $worktrees = Get-ParsedWorktrees
-    $match = $worktrees | Where-Object { $_.Path -match [regex]::Escape($Name) -or $_.Branch -match [regex]::Escape($Name) } | Select-Object -First 1
-    if (-not $match) {
-        Write-Host "No worktree matching '$Name' found."
-        return
-    }
     $pwd = (Get-Location).Path.Replace('\', '/')
-    $matchPath = $match.Path.Replace('\', '/')
-    if ($pwd -eq $matchPath -or $pwd.StartsWith($matchPath + '/')) {
-        Write-Host "Cannot clean up the current worktree. Switch to a different worktree first."
-        return
+
+    if (-not $Name) {
+        # no argument — use current worktree
+        $match = $worktrees | Where-Object {
+            $p = $_.Path.Replace('\', '/')
+            $pwd -eq $p -or $pwd.StartsWith($p + '/')
+        } | Select-Object -Last 1
+        if (-not $match) {
+            Write-Host "Not inside any known worktree."
+            return
+        }
+        $Name = $match.Branch
+        # check we're not in the main worktree
+        $mainPath = $worktrees[0].Path.Replace('\', '/')
+        if ($pwd -eq $mainPath -or $pwd.StartsWith($mainPath + '/')) {
+            Write-Host "Cannot clean up the main worktree."
+            return
+        }
+        # switch to main worktree before cleaning up
+        Write-Host "Switching to main worktree at: $($worktrees[0].Path)"
+        Set-Location $worktrees[0].Path
+    } else {
+        $match = $worktrees | Where-Object { $_.Path -match [regex]::Escape($Name) -or $_.Branch -match [regex]::Escape($Name) } | Select-Object -First 1
+        if (-not $match) {
+            Write-Host "No worktree matching '$Name' found."
+            return
+        }
+        $matchPath = $match.Path.Replace('\', '/')
+        if ($pwd -eq $matchPath -or $pwd.StartsWith($matchPath + '/')) {
+            # in the target worktree — switch to main first
+            Write-Host "Switching to main worktree at: $($worktrees[0].Path)"
+            Set-Location $worktrees[0].Path
+        }
     }
     # check for uncommitted changes
     $status = git -C $match.Path status --porcelain

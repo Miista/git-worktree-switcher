@@ -65,7 +65,7 @@ help_message() {
 	echo -e "\twt add <branch> [--force]: add a new worktree for <branch> as a sibling folder."
 	echo -e "\twt create <branch> [--force]: add a new worktree for <branch> and switch to it."
 	echo -e "\twt rm <branch> [--force]: remove the worktree matching <branch>."
-	echo -e "\twt done <branch>: safely clean up a worktree after all changes are pushed."
+	echo -e "\twt done [branch]: safely clean up a worktree after all changes are pushed."
 }
 
 rm_worktree() {
@@ -101,25 +101,49 @@ rm_worktree() {
 
 done_worktree() {
 	local name="$1"
-	if [ -z "$name" ]; then
-		echo "Usage: wt done <branch-name>"
-		return 1
-	fi
 	local match_path match_branch
-	eval "$(git worktree list --porcelain | awk -v name="$name" '
-		/^worktree / { path = substr($0, 10) }
-		/^branch /   { branch = substr($0, 8); sub("^refs/heads/", "", branch) }
-		/^$/         { if (path ~ name || branch ~ name) { print "match_path=" path "\nmatch_branch=" branch; exit } }
-	')"
-	if [ -z "$match_path" ]; then
-		echo "No worktree matching '$name' found."
-		return 1
-	fi
-	local current_path
-	current_path=$(pwd)
-	if [[ "$current_path" == "$match_path" || "$current_path" == "$match_path/"* ]]; then
-		echo "Cannot clean up the current worktree. Switch to a different worktree first."
-		return 1
+	if [ -z "$name" ]; then
+		# no argument — use current worktree
+		local current_path
+		current_path=$(pwd)
+		eval "$(git worktree list --porcelain | awk -v cwd="$current_path" '
+			/^worktree / { path = substr($0, 10) }
+			/^branch /   { branch = substr($0, 8); sub("^refs/heads/", "", branch) }
+			/^$/         { if (cwd == path || index(cwd, path "/") == 1) { print "match_path=" path "\nmatch_branch=" branch; exit } }
+		')"
+		if [ -z "$match_path" ]; then
+			echo "Not inside any known worktree."
+			return 1
+		fi
+		name="$match_branch"
+		# switch to main worktree before cleaning up
+		local main_path
+		main_path=$(git worktree list --porcelain | awk 'NR==1{print $2}')
+		if [[ "$current_path" == "$main_path" || "$current_path" == "$main_path/"* ]]; then
+			echo "Cannot clean up the main worktree."
+			return 1
+		fi
+		echo "Switching to main worktree at: $main_path"
+		cd "$main_path"
+	else
+		eval "$(git worktree list --porcelain | awk -v name="$name" '
+			/^worktree / { path = substr($0, 10) }
+			/^branch /   { branch = substr($0, 8); sub("^refs/heads/", "", branch) }
+			/^$/         { if (path ~ name || branch ~ name) { print "match_path=" path "\nmatch_branch=" branch; exit } }
+		')"
+		if [ -z "$match_path" ]; then
+			echo "No worktree matching '$name' found."
+			return 1
+		fi
+		local current_path
+		current_path=$(pwd)
+		if [[ "$current_path" == "$match_path" || "$current_path" == "$match_path/"* ]]; then
+			# in the target worktree — switch to main first
+			local main_path
+			main_path=$(git worktree list --porcelain | awk 'NR==1{print $2}')
+			echo "Switching to main worktree at: $main_path"
+			cd "$main_path"
+		fi
 	fi
 	# check for uncommitted changes
 	local status
