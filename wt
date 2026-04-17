@@ -65,7 +65,7 @@ help_message() {
 	echo -e "\twt add <branch> [--force]: add a new worktree for <branch> as a sibling folder."
 	echo -e "\twt create <branch> [--force]: add a new worktree for <branch> and switch to it."
 	echo -e "\twt rm <worktree-name> [--force]: remove the worktree matching <worktree-name>."
-	echo -e "\twt done [worktree-name]: safely clean up a worktree after all changes are pushed."
+	echo -e "\twt done [worktree-name] [--yes]: safely clean up a worktree after all changes are pushed."
 }
 
 rm_worktree() {
@@ -100,7 +100,15 @@ rm_worktree() {
 }
 
 done_worktree() {
-	local name="$1"
+	local name=""
+	local yes=false
+	for arg in "$@"; do
+		if [[ "$arg" == "--yes" ]]; then
+			yes=true
+		elif [ -z "$name" ]; then
+			name="$arg"
+		fi
+	done
 	local match_path match_branch
 	if [ -z "$name" ]; then
 		# no argument — use current worktree
@@ -145,43 +153,53 @@ done_worktree() {
 			cd "$main_path"
 		fi
 	fi
-	# check for uncommitted changes
-	local status
-	status=$(git -C "$match_path" status --porcelain)
-	if [ -n "$status" ]; then
-		echo "Worktree '$name' has uncommitted changes:"
-		git -C "$match_path" status --short
-		echo ""
-		echo "Commit or stash your changes first, then run 'wt done $name' again."
-		return 1
-	fi
-	# check for unpushed commits
-	local upstream
-	upstream=$(git -C "$match_path" rev-parse --abbrev-ref "@{upstream}" 2>/dev/null)
-	if [ -n "$upstream" ]; then
-		local unpushed
-		unpushed=$(git -C "$match_path" log "$upstream..HEAD" --oneline)
-		if [ -n "$unpushed" ]; then
-			echo "Worktree '$name' has unpushed commits:"
-			echo "$unpushed"
+	if [[ "$yes" == false ]]; then
+		# check for uncommitted changes
+		local status
+		status=$(git -C "$match_path" status --porcelain)
+		if [ -n "$status" ]; then
+			echo "Worktree '$name' has uncommitted changes:"
+			git -C "$match_path" status --short
 			echo ""
-			echo "Push your changes first with 'git push', then run 'wt done $name' again."
+			echo "Commit or stash your changes first, then run 'wt done $name' again."
 			return 1
 		fi
-	else
-		# no upstream set — check if there are any commits not on the main branch
-		local main_branch
-		main_branch=$(git -C "$match_path" rev-parse --abbrev-ref HEAD 2>/dev/null)
-		echo "Branch '$main_branch' has no upstream tracking branch."
-		echo "Push your branch first with 'git push -u origin $main_branch', then run 'wt done $name' again."
-		return 1
+		# check for unpushed commits
+		local upstream
+		upstream=$(git -C "$match_path" rev-parse --abbrev-ref "@{upstream}" 2>/dev/null)
+		if [ -n "$upstream" ]; then
+			local unpushed
+			unpushed=$(git -C "$match_path" log "$upstream..HEAD" --oneline)
+			if [ -n "$unpushed" ]; then
+				echo "Worktree '$name' has unpushed commits:"
+				echo "$unpushed"
+				echo ""
+				echo "Push your changes first with 'git push', then run 'wt done $name' again."
+				return 1
+			fi
+		else
+			# no upstream set
+			local main_branch
+			main_branch=$(git -C "$match_path" rev-parse --abbrev-ref HEAD 2>/dev/null)
+			echo "Branch '$main_branch' has no upstream tracking branch."
+			echo "Push your branch first with 'git push -u origin $main_branch', then run 'wt done $name' again."
+			return 1
+		fi
 	fi
 	# all clean — remove worktree and delete branch
 	echo "Removing worktree at: $match_path"
-	git worktree remove "$match_path"
+	if [[ "$yes" == true ]]; then
+		git worktree remove --force "$match_path"
+	else
+		git worktree remove "$match_path"
+	fi
 	if [ $? -eq 0 ] && [ -n "$match_branch" ]; then
 		echo "Deleting branch: $match_branch"
-		git branch -d "$match_branch"
+		if [[ "$yes" == true ]]; then
+			git branch -D "$match_branch"
+		else
+			git branch -d "$match_branch"
+		fi
 	fi
 }
 
@@ -360,7 +378,7 @@ rm)
 	rm_worktree "${args[1]}" "${args[2]}"
 	;;
 done)
-	done_worktree "${args[1]}"
+	done_worktree "${args[1]}" "${args[2]}"
 	;;
 *)
 	if [[ "$is_interactive" == true ]]; then

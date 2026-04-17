@@ -15,10 +15,12 @@ param(
     [switch]$i,
     [switch]$h,
     [switch]$help,
-    [switch]$force
+    [switch]$force,
+    [switch]$yes
 )
 
 $isForce = $force.IsPresent -or $ForceArg -eq '--force' -or $ForceArg -eq '-force'
+$isYes = $yes.IsPresent -or $ForceArg -eq '--yes' -or $ForceArg -eq '-yes'
 
 $VERSION = '0.1.3'
 
@@ -38,7 +40,7 @@ function Show-Help {
     Write-Host '  wt add <branch> [--force]     add a new worktree for <branch> as a sibling folder.'
     Write-Host '  wt create <branch> [--force]  add a new worktree for <branch> and switch to it.'
     Write-Host '  wt rm <worktree-name> [--force]      remove the worktree matching <worktree-name>.'
-    Write-Host '  wt done [worktree-name]              safely clean up a worktree after all changes are pushed.'
+    Write-Host '  wt done [worktree-name] [--yes]       safely clean up a worktree after all changes are pushed.'
 }
 
 function Get-WorktreeList {
@@ -173,7 +175,7 @@ function Invoke-CreateWorktree([string]$Branch, [bool]$Force) {
 }
 
 
-function Invoke-DoneWorktree([string]$Name) {
+function Invoke-DoneWorktree([string]$Name, [bool]$Yes) {
     $worktrees = Get-ParsedWorktrees
     $pwd = (Get-Location).Path.Replace('\', '/')
 
@@ -210,39 +212,49 @@ function Invoke-DoneWorktree([string]$Name) {
             Set-Location $worktrees[0].Path
         }
     }
-    # check for uncommitted changes
-    $status = git -C $match.Path status --porcelain
-    if ($status) {
-        Write-Host "Worktree '$Name' has uncommitted changes:"
-        git -C $match.Path status --short
-        Write-Host ""
-        Write-Host "Commit or stash your changes first, then run 'wt done $Name' again."
-        return
-    }
-    # check for unpushed commits
-    $upstream = git -C $match.Path rev-parse --abbrev-ref "@{upstream}" 2>$null
-    if ($LASTEXITCODE -eq 0 -and $upstream) {
-        $unpushed = git -C $match.Path log "$upstream..HEAD" --oneline
-        if ($unpushed) {
-            Write-Host "Worktree '$Name' has unpushed commits:"
-            Write-Host $unpushed
+    if (-not $Yes) {
+        # check for uncommitted changes
+        $status = git -C $match.Path status --porcelain
+        if ($status) {
+            Write-Host "Worktree '$Name' has uncommitted changes:"
+            git -C $match.Path status --short
             Write-Host ""
-            Write-Host "Push your changes first with 'git push', then run 'wt done $Name' again."
+            Write-Host "Commit or stash your changes first, then run 'wt done $Name' again."
             return
         }
-    } else {
-        # no upstream set
-        $branchName = git -C $match.Path rev-parse --abbrev-ref HEAD 2>$null
-        Write-Host "Branch '$branchName' has no upstream tracking branch."
-        Write-Host "Push your branch first with 'git push -u origin $branchName', then run 'wt done $Name' again."
-        return
+        # check for unpushed commits
+        $upstream = git -C $match.Path rev-parse --abbrev-ref "@{upstream}" 2>$null
+        if ($LASTEXITCODE -eq 0 -and $upstream) {
+            $unpushed = git -C $match.Path log "$upstream..HEAD" --oneline
+            if ($unpushed) {
+                Write-Host "Worktree '$Name' has unpushed commits:"
+                Write-Host $unpushed
+                Write-Host ""
+                Write-Host "Push your changes first with 'git push', then run 'wt done $Name' again."
+                return
+            }
+        } else {
+            # no upstream set
+            $branchName = git -C $match.Path rev-parse --abbrev-ref HEAD 2>$null
+            Write-Host "Branch '$branchName' has no upstream tracking branch."
+            Write-Host "Push your branch first with 'git push -u origin $branchName', then run 'wt done $Name' again."
+            return
+        }
     }
     # all clean — remove worktree and delete branch
     Write-Host "Removing worktree at: $($match.Path)"
-    git worktree remove $match.Path
+    if ($Yes) {
+        git worktree remove --force $match.Path
+    } else {
+        git worktree remove $match.Path
+    }
     if ($LASTEXITCODE -eq 0 -and $match.Branch) {
         Write-Host "Deleting branch: $($match.Branch)"
-        git branch -d $match.Branch
+        if ($Yes) {
+            git branch -D $match.Branch
+        } else {
+            git branch -d $match.Branch
+        }
     }
 }
 
@@ -317,6 +329,6 @@ switch ($Command) {
     'add'     { Invoke-AddWorktree $Arg $isForce }
     'create'  { Invoke-CreateWorktree $Arg $isForce }
     'rm'      { Invoke-RmWorktree $Arg $isForce }
-    'done'    { Invoke-DoneWorktree $Arg }
+    'done'    { Invoke-DoneWorktree $Arg $isYes }
     default   { Invoke-Switch $Command }
 }
