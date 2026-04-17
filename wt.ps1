@@ -122,12 +122,14 @@ function Invoke-AddWorktree([string]$Branch, [bool]$Force) {
     git rev-parse --verify "origin/$Branch" 2>$null | Out-Null
     $remoteBranchExists = $LASTEXITCODE -eq 0
 
+    # 1a. both remote and local exist — verify local tracks the correct remote
     if ($remoteBranchExists -and $branchExists) {
         $upstream = git config "branch.$Branch.remote" 2>$null
         $mergeRef = git config "branch.$Branch.merge" 2>$null
         if ($upstream -eq 'origin' -and $mergeRef -eq "refs/heads/$Branch") {
             git worktree add @forceArg $worktreePath $Branch --quiet
         } else {
+            # local branch tracks a different remote or has no upstream — inform the user
             Write-Host "Local branch '$Branch' exists but does not track 'origin/$Branch'."
             if ($upstream -and $mergeRef) {
                 $trackingBranch = $mergeRef -replace '^refs/heads/', ''
@@ -138,8 +140,10 @@ function Invoke-AddWorktree([string]$Branch, [bool]$Force) {
             Write-Host "Fix with: git branch --set-upstream-to=origin/$Branch $Branch"
             return
         }
+    # 1b. only remote exists — create local tracking branch
     } elseif ($remoteBranchExists) {
         git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch" --quiet
+    # 1c. only local exists — use it directly
     } elseif ($branchExists) {
         git worktree add @forceArg $worktreePath $Branch --quiet
     } else {
