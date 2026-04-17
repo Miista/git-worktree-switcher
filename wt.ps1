@@ -37,9 +37,9 @@ function Show-Help {
     Write-Host '  wt current          show the current worktree.'
     Write-Host '  wt add <branch> [--force]     add a new worktree for <branch> as a sibling folder.'
     Write-Host '  wt create <branch> [--force]  add a new worktree for <branch> and switch to it.'
-    Write-Host '  wt rm <branch> [--force]  remove the worktree matching <branch>.'
+    Write-Host '  wt rm <branch> [--force]      remove the worktree matching <branch>.'
     Write-Host '  wt delete <branch> [--force]  remove the worktree and delete the branch.'
-    Write-Host '  wt done <branch>             safely clean up a worktree after all changes are pushed.'
+    Write-Host '  wt done <branch>              safely clean up a worktree after all changes are pushed.'
 }
 
 function Get-WorktreeList {
