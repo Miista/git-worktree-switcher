@@ -38,7 +38,6 @@ function Show-Help {
     Write-Host '  wt add <branch> [--force]     add a new worktree for <branch> as a sibling folder.'
     Write-Host '  wt create <branch> [--force]  add a new worktree for <branch> and switch to it.'
     Write-Host '  wt rm <branch> [--force]      remove the worktree matching <branch>.'
-    Write-Host '  wt delete <branch> [--force]  remove the worktree and delete the branch.'
     Write-Host '  wt done <branch>              safely clean up a worktree after all changes are pushed.'
 }
 
@@ -154,45 +153,6 @@ function Invoke-CreateWorktree([string]$Branch, [bool]$Force) {
     }
 }
 
-function Invoke-DeleteWorktree([string]$Name, [bool]$Force) {
-    if (-not $Name) {
-        Write-Host 'Usage: wt delete <branch-name> [--force]'
-        return
-    }
-    $worktrees = Get-ParsedWorktrees
-    $match = $worktrees | Where-Object { $_.Path -match [regex]::Escape($Name) -or $_.Branch -match [regex]::Escape($Name) } | Select-Object -First 1
-    if (-not $match) {
-        Write-Host "No worktree matching '$Name' found."
-        return
-    }
-    $pwd = (Get-Location).Path.Replace('\', '/')
-    $matchPath = $match.Path.Replace('\', '/')
-    if ($pwd -eq $matchPath -or $pwd.StartsWith($matchPath + '/')) {
-        Write-Host "Cannot delete the current worktree. Switch to a different worktree first."
-        return
-    }
-    $removeOk = $false
-    if (Test-Path $match.Path) {
-        Write-Host "Removing worktree at: $($match.Path)"
-        if ($Force) {
-            git worktree remove --force $match.Path
-        } else {
-            git worktree remove $match.Path
-        }
-        $removeOk = $LASTEXITCODE -eq 0
-    } else {
-        git worktree prune
-        $removeOk = $true
-    }
-    if ($removeOk -and $match.Branch) {
-        Write-Host "Deleting branch: $($match.Branch)"
-        if ($Force) {
-            git branch -D $match.Branch
-        } else {
-            git branch -d $match.Branch
-        }
-    }
-}
 
 function Invoke-DoneWorktree([string]$Name) {
     if (-not $Name) {
@@ -238,8 +198,13 @@ function Invoke-DoneWorktree([string]$Name) {
         Write-Host "Push your branch first with 'git push -u origin $branchName', then run 'wt done $Name' again."
         return
     }
-    # all clean — delete worktree and branch
-    Invoke-DeleteWorktree $Name $false
+    # all clean — remove worktree and delete branch
+    Write-Host "Removing worktree at: $($match.Path)"
+    git worktree remove $match.Path
+    if ($LASTEXITCODE -eq 0 -and $match.Branch) {
+        Write-Host "Deleting branch: $($match.Branch)"
+        git branch -d $match.Branch
+    }
 }
 
 function Invoke-RmWorktree([string]$Name, [bool]$Force) {
@@ -313,7 +278,6 @@ switch ($Command) {
     'add'     { Invoke-AddWorktree $Arg $isForce }
     'create'  { Invoke-CreateWorktree $Arg $isForce }
     'rm'      { Invoke-RmWorktree $Arg $isForce }
-    'delete'  { Invoke-DeleteWorktree $Arg $isForce }
     'done'    { Invoke-DoneWorktree $Arg }
     default   { Invoke-Switch $Command }
 }
