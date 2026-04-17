@@ -32,7 +32,7 @@ done
 switch_worktree() {
 	local name="$1"
 	if [ -z "$name" ]; then
-		echo "Usage: wt <worktree-name>"
+		echo "Usage: wt <worktree>"
 		return 1
 	fi
 	local directory
@@ -55,7 +55,7 @@ help_message() {
 	echo -e "wt lets you switch between your git worktrees with speed.\n"
 	echo "Usage:"
 	echo -e "\twt: interactively select a worktree using fzf (default)."
-	echo -e "\twt <worktree-name>: search for worktree names and change to that directory."
+	echo -e "\twt <worktree>: search for worktree names and change to that directory."
 	echo -e "\twt -i: interactively select a worktree using fzf."
 	echo -e "\twt list: list out all the git worktrees."
 	echo -e "\twt update: update to the latest release of worktree switcher."
@@ -64,8 +64,8 @@ help_message() {
 	echo -e "\twt current: show the current worktree."
 	echo -e "\twt add <branch> [--force]: add a new worktree for <branch> as a sibling folder."
 	echo -e "\twt create <branch> [--force]: add a new worktree for <branch> and switch to it."
-	echo -e "\twt rm <worktree-name> [--force]: remove the worktree matching <worktree-name>."
-	echo -e "\twt done [worktree-name]: safely clean up a worktree after all changes are pushed."
+	echo -e "\twt rm <worktree> [--force]: remove the worktree matching <worktree>."
+	echo -e "\twt done [worktree]: safely clean up a worktree after all changes are pushed."
 }
 
 rm_worktree() {
