@@ -40,7 +40,7 @@ function Show-Help {
     Write-Host '  wt add <branch> [--force]     add a new worktree for <branch> as a sibling folder.'
     Write-Host '  wt create <branch> [--force]  add a new worktree for <branch> and switch to it.'
     Write-Host '  wt rm <worktree-name> [--force]      remove the worktree matching <worktree-name>.'
-    Write-Host '  wt done [worktree-name] [--yes]       safely clean up a worktree after all changes are pushed.'
+    Write-Host '  wt done [worktree-name]               safely clean up a worktree after all changes are pushed.'
 }
 
 function Get-WorktreeList {
