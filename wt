@@ -269,7 +269,7 @@ list)
 update)
 	update
 	;;
-help)
+help|--help|-h)
 	help_message
 	;;
 version)
