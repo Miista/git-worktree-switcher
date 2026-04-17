@@ -185,34 +185,9 @@ create_worktree() {
 		echo "Usage: wt create <branch-name> [--force]"
 		return 1
 	fi
-	local main_path
-	main_path=$(git worktree list --porcelain | awk 'NR==1{print $2}')
-	local parent_path
-	parent_path=$(dirname "$main_path")
-	local worktree_path="$parent_path/$branch"
-	echo "Creating worktree '$branch' at: $worktree_path"
-	local force_flag=""
-	[ "$force" == "--force" ] && force_flag="--force"
-	# 1. check for remote branch
-	if git rev-parse --verify "origin/$branch" &>/dev/null; then
-		git worktree add $force_flag --track -b "$branch" "$worktree_path" "origin/$branch"
-	else
-		# 2. fetch and check for remote branch again
-		git fetch --quiet
-		if git rev-parse --verify "origin/$branch" &>/dev/null; then
-			git worktree add $force_flag --track -b "$branch" "$worktree_path" "origin/$branch"
-		# 3. check for local branch
-		elif git rev-parse --verify "$branch" &>/dev/null; then
-			git worktree add $force_flag "$worktree_path" "$branch"
-		# 4. create new local branch
-		else
-			git worktree add $force_flag -b "$branch" "$worktree_path"
-		fi
-	fi
+	add_worktree "$branch" "$force"
 	if [ $? -eq 0 ]; then
-		echo "Switching to worktree at: $worktree_path"
-		cd "$worktree_path"
-		exec $SHELL
+		switch_worktree "$branch"
 	fi
 }
 

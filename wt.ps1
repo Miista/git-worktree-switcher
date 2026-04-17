@@ -147,41 +147,9 @@ function Invoke-CreateWorktree([string]$Branch, [bool]$Force) {
         Write-Host 'Usage: wt create <branch-name> [--force]'
         return
     }
-    $worktrees = Get-ParsedWorktrees
-    $mainPath = $worktrees[0].Path
-    $parentPath = Split-Path $mainPath -Parent
-    $worktreePath = Join-Path $parentPath $Branch
-
-    Write-Host "Creating worktree '$Branch' at: $worktreePath"
-    $forceArg = if ($Force) { @('--force') } else { @() }
-    # 1. check for remote branch
-    git rev-parse --verify "origin/$Branch" 2>$null | Out-Null
-    $remoteBranchExists = $LASTEXITCODE -eq 0
-
-    if ($remoteBranchExists) {
-        git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch"
-    } else {
-        # 2. fetch and check for remote branch again
-        git fetch --quiet
-        git rev-parse --verify "origin/$Branch" 2>$null | Out-Null
-        $remoteBranchExists = $LASTEXITCODE -eq 0
-
-        # 3. check for local branch
-        git rev-parse --verify $Branch 2>$null | Out-Null
-        $branchExists = $LASTEXITCODE -eq 0
-
-        if ($remoteBranchExists) {
-            git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch"
-        } elseif ($branchExists) {
-            git worktree add @forceArg $worktreePath $Branch
-        # 4. create new local branch
-        } else {
-            git worktree add @forceArg -b $Branch $worktreePath
-        }
-    }
+    Invoke-AddWorktree $Branch $Force
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "Switching to worktree at: $worktreePath"
-        Set-Location $worktreePath
+        Invoke-Switch $Branch
     }
 }
 
