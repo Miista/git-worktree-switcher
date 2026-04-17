@@ -64,15 +64,15 @@ help_message() {
 	echo -e "\twt current: show the current worktree."
 	echo -e "\twt add <branch> [--force]: add a new worktree for <branch> as a sibling folder."
 	echo -e "\twt create <branch> [--force]: add a new worktree for <branch> and switch to it."
-	echo -e "\twt remove|rm <branch> [--force]: remove the worktree matching <branch>."
+	echo -e "\twt rm <branch> [--force]: remove the worktree matching <branch>."
 	echo -e "\twt delete <branch> [--force]: remove the worktree and delete the branch."
 }
 
-remove_worktree() {
+rm_worktree() {
 	local name="$1"
 	local force="$2"
 	if [ -z "$name" ]; then
-		echo "Usage: wt remove <branch-name> [--force]"
+		echo "Usage: wt rm <branch-name> [--force]"
 		return 1
 	fi
 	local match_path
@@ -162,18 +162,18 @@ add_worktree() {
 	[ "$force" == "--force" ] && force_flag="--force"
 	# 1. check for remote branch
 	if git rev-parse --verify "origin/$branch" &>/dev/null; then
-		git worktree add $force_flag --track -b "$branch" "$worktree_path" "origin/$branch"
+		git worktree add $force_flag --track -b "$branch" "$worktree_path" "origin/$branch" --quiet
 	else
 		# 2. fetch and check for remote branch again
 		git fetch --quiet
 		if git rev-parse --verify "origin/$branch" &>/dev/null; then
-			git worktree add $force_flag --track -b "$branch" "$worktree_path" "origin/$branch"
+			git worktree add $force_flag --track -b "$branch" "$worktree_path" "origin/$branch" --quiet
 		# 3. check for local branch
 		elif git rev-parse --verify "$branch" &>/dev/null; then
-			git worktree add $force_flag "$worktree_path" "$branch"
+			git worktree add $force_flag "$worktree_path" "$branch" --quiet
 		# 4. create new local branch
 		else
-			git worktree add $force_flag -b "$branch" "$worktree_path"
+			git worktree add $force_flag -b "$branch" "$worktree_path" --quiet
 		fi
 	fi
 }
@@ -295,8 +295,8 @@ add)
 create)
 	create_worktree "${args[1]}" "${args[2]}"
 	;;
-remove|rm)
-	remove_worktree "${args[1]}" "${args[2]}"
+rm)
+	rm_worktree "${args[1]}" "${args[2]}"
 	;;
 delete)
 	delete_worktree "${args[1]}" "${args[2]}"

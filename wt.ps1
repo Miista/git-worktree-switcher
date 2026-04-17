@@ -37,7 +37,7 @@ function Show-Help {
     Write-Host '  wt current          show the current worktree.'
     Write-Host '  wt add <branch> [--force]     add a new worktree for <branch> as a sibling folder.'
     Write-Host '  wt create <branch> [--force]  add a new worktree for <branch> and switch to it.'
-    Write-Host '  wt remove|rm <branch> [--force]  remove the worktree matching <branch>.'
+    Write-Host '  wt rm <branch> [--force]  remove the worktree matching <branch>.'
     Write-Host '  wt delete <branch> [--force]  remove the worktree and delete the branch.'
 }
 
@@ -120,7 +120,7 @@ function Invoke-AddWorktree([string]$Branch, [bool]$Force) {
     $remoteBranchExists = $LASTEXITCODE -eq 0
 
     if ($remoteBranchExists) {
-        git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch"
+        git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch" --quiet
     } else {
         # 2. fetch and check for remote branch again
         git fetch --quiet
@@ -132,12 +132,12 @@ function Invoke-AddWorktree([string]$Branch, [bool]$Force) {
         $branchExists = $LASTEXITCODE -eq 0
 
         if ($remoteBranchExists) {
-            git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch"
+            git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch" --quiet
         } elseif ($branchExists) {
-            git worktree add @forceArg $worktreePath $Branch
+            git worktree add @forceArg $worktreePath $Branch --quiet
         # 4. create new local branch
         } else {
-            git worktree add @forceArg -b $Branch $worktreePath
+            git worktree add @forceArg -b $Branch $worktreePath --quiet
         }
     }
 }
@@ -193,9 +193,9 @@ function Invoke-DeleteWorktree([string]$Name, [bool]$Force) {
     }
 }
 
-function Invoke-RemoveWorktree([string]$Name, [bool]$Force) {
+function Invoke-RmWorktree([string]$Name, [bool]$Force) {
     if (-not $Name) {
-        Write-Host 'Usage: wt remove <branch-name> [--force]'
+        Write-Host 'Usage: wt rm <branch-name> [--force]'
         return
     }
     $worktrees = Get-ParsedWorktrees
@@ -263,8 +263,7 @@ switch ($Command) {
     'current' { Show-CurrentWorktree }
     'add'     { Invoke-AddWorktree $Arg $isForce }
     'create'  { Invoke-CreateWorktree $Arg $isForce }
-    'remove'  { Invoke-RemoveWorktree $Arg $isForce }
-    'rm'      { Invoke-RemoveWorktree $Arg $isForce }
+    'rm'      { Invoke-RmWorktree $Arg $isForce }
     'delete'  { Invoke-DeleteWorktree $Arg $isForce }
     default   { Invoke-Switch $Command }
 }
