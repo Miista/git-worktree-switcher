@@ -47,7 +47,7 @@ help_message() {
 	echo -e "\twt current: show the current worktree."
 	echo -e "\twt add <branch> [--force]: add a new worktree for <branch> as a sibling folder."
 	echo -e "\twt create <branch> [--force]: add a new worktree for <branch> and switch to it."
-	echo -e "\twt remove <branch> [--force]: remove the worktree matching <branch>."
+	echo -e "\twt remove|rm <branch> [--force]: remove the worktree matching <branch>."
 	echo -e "\twt delete <branch> [--force]: remove the worktree and delete the branch."
 }
 
@@ -287,7 +287,7 @@ add)
 create)
 	create_worktree "${args[1]}" "${args[2]}"
 	;;
-remove)
+remove|rm)
 	remove_worktree "${args[1]}" "${args[2]}"
 	;;
 delete)

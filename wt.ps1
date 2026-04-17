@@ -37,7 +37,7 @@ function Show-Help {
     Write-Host '  wt current          show the current worktree.'
     Write-Host '  wt add <branch> [--force]     add a new worktree for <branch> as a sibling folder.'
     Write-Host '  wt create <branch> [--force]  add a new worktree for <branch> and switch to it.'
-    Write-Host '  wt remove <branch> [--force]  remove the worktree matching <branch>.'
+    Write-Host '  wt remove|rm <branch> [--force]  remove the worktree matching <branch>.'
     Write-Host '  wt delete <branch> [--force]  remove the worktree and delete the branch.'
 }
 
@@ -274,6 +274,7 @@ switch ($Command) {
     'add'     { Invoke-AddWorktree $Arg $isForce }
     'create'  { Invoke-CreateWorktree $Arg $isForce }
     'remove'  { Invoke-RemoveWorktree $Arg $isForce }
+    'rm'      { Invoke-RemoveWorktree $Arg $isForce }
     'delete'  { Invoke-DeleteWorktree $Arg $isForce }
     default   { Invoke-Switch $Command }
 }
