@@ -117,3 +117,66 @@ Describe 'Show-CurrentWorktree' {
         $output | Should -Match 'Not inside any known worktree'
     }
 }
+
+Describe 'Invoke-GotoMain' {
+    BeforeAll {
+        $script:repo = New-TestWorktreeRepo -Branches @('feature-a')
+        Set-Location $script:repo.MainPath
+        $null = (. $script:ScriptPath help) 6>&1
+    }
+
+    BeforeEach {
+        $script:savedLocation = Get-Location
+    }
+
+    AfterEach {
+        Set-Location $script:savedLocation
+    }
+
+    AfterAll {
+        Remove-TestRepo $script:repo.Root
+    }
+
+    It 'changes directory to the main worktree from a secondary worktree' {
+        Set-Location $script:repo.Worktrees['feature-a']
+        $null = (Invoke-GotoMain) 6>&1
+        (Get-Location).Path | Should -Be $script:repo.MainPath
+    }
+}
+
+Describe 'Invoke-Switch' {
+    BeforeAll {
+        $script:repo = New-TestWorktreeRepo -Branches @('feature-a', 'feature-b')
+        Set-Location $script:repo.MainPath
+        $null = (. $script:ScriptPath help) 6>&1
+    }
+
+    BeforeEach {
+        $script:savedLocation = Get-Location
+        Set-Location $script:repo.MainPath
+    }
+
+    AfterEach {
+        Set-Location $script:savedLocation
+    }
+
+    AfterAll {
+        Remove-TestRepo $script:repo.Root
+    }
+
+    It 'switches to a worktree matching by branch name' {
+        $null = (Invoke-Switch 'feature-a') 6>&1
+        (Get-Location).Path | Should -BeLike '*feature-a*'
+    }
+
+    It 'switches to a different worktree' {
+        $null = (Invoke-Switch 'feature-b') 6>&1
+        (Get-Location).Path | Should -BeLike '*feature-b*'
+    }
+
+    It 'stays in place when no match found' {
+        $before = (Get-Location).Path
+        $null = (Invoke-Switch 'nonexistent') 6>&1
+        (Get-Location).Path | Should -Be $before
+    }
+}
