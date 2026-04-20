@@ -712,3 +712,87 @@ Describe 'Invoke-DoneWorktree' {
         }
     }
 }
+
+Describe 'Invoke-RmWorktree' {
+    Context 'prints usage when no name given' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'prints usage' {
+            $output = (Invoke-RmWorktree '' $false) 6>&1 | Out-String
+            $output | Should -Match 'Usage:'
+        }
+    }
+
+    Context 'removes a matching worktree' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            $script:wtPath = Join-Path $script:repo.Root 'rm-target'
+            git worktree add -b rm-target $script:wtPath --quiet 2>$null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'removes the worktree' {
+            $null = (Invoke-RmWorktree 'rm-target' $false) 6>&1
+            Test-Path $script:wtPath | Should -BeFalse
+        }
+    }
+
+    Context 'blocks when inside the target worktree' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            $script:wtPath = Join-Path $script:repo.Root 'rm-current'
+            git worktree add -b rm-current $script:wtPath --quiet 2>$null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        BeforeEach {
+            $script:savedLocation = Get-Location
+        }
+
+        AfterEach {
+            Set-Location $script:savedLocation
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'prints cannot remove message' {
+            Set-Location $script:wtPath
+            $output = (Invoke-RmWorktree 'rm-current' $false) 6>&1 | Out-String
+            $output | Should -Match 'Cannot remove the current worktree'
+            Test-Path $script:wtPath | Should -BeTrue
+        }
+    }
+
+    Context 'prints not found for unknown name' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'prints not found message' {
+            $output = (Invoke-RmWorktree 'nonexistent' $false) 6>&1 | Out-String
+            $output | Should -Match 'No worktree matching'
+        }
+    }
+}
