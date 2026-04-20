@@ -316,3 +316,36 @@ Describe 'Invoke-AddWorktree' {
         }
     }
 }
+
+Describe 'Invoke-CreateWorktree' {
+    BeforeAll {
+        $script:repo = New-TestRepo
+        Set-Location $script:repo.MainPath
+        $null = (. $script:ScriptPath help) 6>&1
+    }
+
+    BeforeEach {
+        $script:savedLocation = Get-Location
+        Set-Location $script:repo.MainPath
+    }
+
+    AfterEach {
+        Set-Location $script:savedLocation
+    }
+
+    AfterAll {
+        Remove-TestRepo $script:repo.Root
+    }
+
+    It 'prints usage when no branch given' {
+        $output = (Invoke-CreateWorktree '' $false) 6>&1 | Out-String
+        $output | Should -Match 'Usage:'
+    }
+
+    It 'creates a worktree and switches to it' {
+        $null = (Invoke-CreateWorktree 'new-feature' $false) 6>&1
+        $wtPath = Join-Path $script:repo.Root 'new-feature'
+        Test-Path $wtPath | Should -BeTrue
+        (Get-Location).Path | Should -BeLike '*new-feature*'
+    }
+}
