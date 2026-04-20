@@ -180,3 +180,139 @@ Describe 'Invoke-Switch' {
         (Get-Location).Path | Should -Be $before
     }
 }
+
+Describe 'Invoke-AddWorktree' {
+    Context 'no branch argument' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'prints usage when no branch given' {
+            $output = (Invoke-AddWorktree '' $false) 6>&1 | Out-String
+            $output | Should -Match 'Usage:'
+        }
+    }
+
+    Context 'branch does not exist anywhere' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'creates a new branch and worktree' {
+            $null = (Invoke-AddWorktree 'brand-new' $false) 6>&1
+            $wtPath = Join-Path $script:repo.Root 'brand-new'
+            Test-Path $wtPath | Should -BeTrue
+        }
+    }
+
+    Context 'branch exists only locally' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            # Create a local branch but don't push it
+            git branch local-only 2>$null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'creates a worktree for the local branch' {
+            $null = (Invoke-AddWorktree 'local-only' $false) 6>&1
+            $wtPath = Join-Path $script:repo.Root 'local-only'
+            Test-Path $wtPath | Should -BeTrue
+        }
+    }
+
+    Context 'branch exists only on remote' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            # Create a branch, push it, then delete locally
+            git checkout -b remote-only --quiet 2>$null
+            New-Item -ItemType File -Path (Join-Path $script:repo.MainPath 'remote-file.txt') -Force | Out-Null
+            git add remote-file.txt
+            git commit -m "remote commit" --quiet
+            git push -u origin remote-only --quiet 2>$null
+            git checkout master --quiet 2>$null
+            git branch -D remote-only 2>$null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'creates a tracking worktree from remote' {
+            $null = (Invoke-AddWorktree 'remote-only' $false) 6>&1
+            $wtPath = Join-Path $script:repo.Root 'remote-only'
+            Test-Path $wtPath | Should -BeTrue
+            # Verify it tracks the remote
+            $upstream = git -C $wtPath rev-parse --abbrev-ref '@{upstream}' 2>$null
+            $upstream | Should -Be 'origin/remote-only'
+        }
+    }
+
+    Context 'branch exists both locally and remotely with correct tracking' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            git checkout -b tracked-branch --quiet 2>$null
+            New-Item -ItemType File -Path (Join-Path $script:repo.MainPath 'tracked.txt') -Force | Out-Null
+            git add tracked.txt
+            git commit -m "tracked commit" --quiet
+            git push -u origin tracked-branch --quiet 2>$null
+            git checkout master --quiet 2>$null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'creates the worktree' {
+            $null = (Invoke-AddWorktree 'tracked-branch' $false) 6>&1
+            $wtPath = Join-Path $script:repo.Root 'tracked-branch'
+            Test-Path $wtPath | Should -BeTrue
+        }
+    }
+
+    Context 'branch exists both locally and remotely with wrong tracking' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            # Create and push a branch
+            git checkout -b mismatched --quiet 2>$null
+            New-Item -ItemType File -Path (Join-Path $script:repo.MainPath 'mis.txt') -Force | Out-Null
+            git add mis.txt
+            git commit -m "mismatched commit" --quiet
+            git push origin mismatched --quiet 2>$null
+            # Break tracking by setting upstream to master
+            git branch --set-upstream-to=origin/master mismatched 2>$null
+            git checkout master --quiet 2>$null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'warns about tracking mismatch' {
+            $output = (Invoke-AddWorktree 'mismatched' $false) 6>&1 | Out-String
+            $output | Should -Match 'does not track'
+        }
+    }
+}
