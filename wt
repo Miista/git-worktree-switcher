@@ -66,6 +66,7 @@ help_message() {
 	echo -e "\twt create <branch> [--force]: add a new worktree for <branch> and switch to it."
 	echo -e "\twt rm <worktree> [--force]: remove the worktree matching <worktree>."
 	echo -e "\twt done [worktree]: safely clean up a worktree after all changes are pushed."
+	echo -e "\twt check [worktree]: show the status of safety checks for a worktree."
 }
 
 rm_worktree() {
@@ -200,6 +201,77 @@ done_worktree() {
 		else
 			git branch -d "$match_branch"
 		fi
+	fi
+}
+
+check_worktree() {
+	local name="$1"
+	local match_path match_branch
+	if [ -z "$name" ]; then
+		local current_path
+		current_path=$(pwd)
+		eval "$(git worktree list --porcelain | awk -v cwd="$current_path" '
+			/^worktree / { path = substr($0, 10) }
+			/^branch /   { branch = substr($0, 8); sub("^refs/heads/", "", branch) }
+			/^$/         { if (cwd == path || index(cwd, path "/") == 1) { print "match_path=" path "\nmatch_branch=" branch; exit } }
+		')"
+		if [ -z "$match_path" ]; then
+			echo "Not inside any known worktree."
+			return 1
+		fi
+		name="$match_branch"
+	else
+		eval "$(git worktree list --porcelain | awk -v name="$name" '
+			/^worktree / { path = substr($0, 10) }
+			/^branch /   { branch = substr($0, 8); sub("^refs/heads/", "", branch) }
+			/^$/         { if (path ~ name || branch ~ name) { print "match_path=" path "\nmatch_branch=" branch; exit } }
+		')"
+		if [ -z "$match_path" ]; then
+			echo "No worktree matching '$name' found."
+			return 1
+		fi
+	fi
+
+	echo "Checking worktree '$name' at: $match_path"
+	echo ""
+	local all_ok=true
+
+	# Check 1: uncommitted changes
+	local status
+	status=$(git -C "$match_path" status --porcelain)
+	if [ -n "$status" ]; then
+		echo "  ✗ Has uncommitted changes"
+		all_ok=false
+	else
+		echo "  ✓ No uncommitted changes"
+	fi
+
+	# Check 2: upstream tracking
+	local upstream
+	upstream=$(git -C "$match_path" rev-parse --abbrev-ref "@{upstream}" 2>/dev/null)
+	if [ -z "$upstream" ]; then
+		echo "  ✗ No upstream tracking branch"
+		all_ok=false
+	else
+		echo "  ✓ Tracking $upstream"
+
+		# Check 3: unpushed commits (only if upstream exists)
+		local unpushed
+		unpushed=$(git -C "$match_path" log "$upstream..HEAD" --oneline)
+		if [ -n "$unpushed" ]; then
+			echo "  ✗ Has unpushed commits"
+			all_ok=false
+		else
+			echo "  ✓ No unpushed commits"
+		fi
+	fi
+
+	echo ""
+	if [[ "$all_ok" == true ]]; then
+		echo "All checks passed. Ready for 'wt done $name'."
+	else
+		echo "Some checks failed. Resolve them before running 'wt done $name'."
+		return 1
 	fi
 }
 
@@ -379,6 +451,9 @@ rm)
 	;;
 done)
 	done_worktree "${args[1]}" "${args[2]}"
+	;;
+check)
+	check_worktree "${args[1]}"
 	;;
 *)
 	if [[ "$is_interactive" == true ]]; then

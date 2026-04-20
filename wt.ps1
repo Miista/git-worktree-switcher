@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 # Switch between git worktrees with speed.
 #
 # IMPORTANT: This script must be dot-sourced so that Set-Location affects
@@ -41,6 +41,7 @@ function Show-Help {
     Write-Host '  wt create <branch> [--force]   add a new worktree for <branch> and switch to it.'
     Write-Host '  wt rm <worktree> [--force]     remove the worktree matching <worktree>.'
     Write-Host '  wt done [worktree]             safely clean up a worktree after all changes are pushed.'
+    Write-Host '  wt check [worktree]            show the status of safety checks for a worktree.'
 }
 
 function Get-WorktreeList {
@@ -258,6 +259,67 @@ function Invoke-DoneWorktree([string]$Name, [bool]$Yes) {
     }
 }
 
+function Invoke-CheckWorktree([string]$Name) {
+    $worktrees = Get-ParsedWorktrees
+    $pwd = (Get-Location).Path.Replace('\', '/')
+
+    if (-not $Name) {
+        $match = $worktrees | Where-Object {
+            $p = $_.Path.Replace('\', '/')
+            $pwd -eq $p -or $pwd.StartsWith($p + '/')
+        } | Select-Object -Last 1
+        if (-not $match) {
+            Write-Host "Not inside any known worktree."
+            return
+        }
+        $Name = $match.Branch
+    } else {
+        $match = $worktrees | Where-Object { $_.Path -match [regex]::Escape($Name) -or $_.Branch -match [regex]::Escape($Name) } | Select-Object -First 1
+        if (-not $match) {
+            Write-Host "No worktree matching '$Name' found."
+            return
+        }
+    }
+
+    Write-Host "Checking worktree '$Name' at: $($match.Path)"
+    Write-Host ''
+    $allOk = $true
+
+    # Check 1: uncommitted changes
+    $status = git -C $match.Path status --porcelain
+    if ($status) {
+        Write-Host "  ✗ Has uncommitted changes" -ForegroundColor Red
+        $allOk = $false
+    } else {
+        Write-Host "  ✓ No uncommitted changes" -ForegroundColor Green
+    }
+
+    # Check 2: upstream tracking
+    $upstream = git -C $match.Path rev-parse --abbrev-ref '@{upstream}' 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $upstream) {
+        Write-Host "  ✗ No upstream tracking branch" -ForegroundColor Red
+        $allOk = $false
+    } else {
+        Write-Host "  ✓ Tracking $upstream" -ForegroundColor Green
+
+        # Check 3: unpushed commits (only if upstream exists)
+        $unpushed = git -C $match.Path log "$upstream..HEAD" --oneline
+        if ($unpushed) {
+            Write-Host "  ✗ Has unpushed commits" -ForegroundColor Red
+            $allOk = $false
+        } else {
+            Write-Host "  ✓ No unpushed commits" -ForegroundColor Green
+        }
+    }
+
+    Write-Host ''
+    if ($allOk) {
+        Write-Host "All checks passed. Ready for 'wt done $Name'." -ForegroundColor Green
+    } else {
+        Write-Host "Some checks failed. Resolve them before running 'wt done $Name'." -ForegroundColor Red
+    }
+}
+
 function Invoke-RmWorktree([string]$Name, [bool]$Force) {
     if (-not $Name) {
         Write-Host 'Usage: wt rm <branch-name> [--force]'
@@ -330,5 +392,6 @@ switch ($Command) {
     'create'  { Invoke-CreateWorktree $Arg $isForce }
     'rm'      { Invoke-RmWorktree $Arg $isForce }
     'done'    { Invoke-DoneWorktree $Arg $isYes }
+    'check'   { Invoke-CheckWorktree $Arg }
     default   { Invoke-Switch $Command }
 }
