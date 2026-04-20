@@ -147,11 +147,11 @@ function Invoke-AddWorktree([string]$Branch, [bool]$Force) {
     # 1b. only remote exists — create local tracking branch
     } elseif ($remoteBranchExists) {
         Write-Host "Creating local branch tracking origin/$Branch"
-        #git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch" --quiet
+        git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch" --quiet
     # 1c. only local exists — use it directly
     } elseif ($branchExists) {
         Write-Host "Using existing local branch '$Branch'"
-        #git worktree add @forceArg $worktreePath $Branch --quiet
+        git worktree add @forceArg $worktreePath $Branch --quiet
     } else {
         # 2. fetch and check for remote branch again
         Write-Host "Branch '$Branch' not found locally or on origin, fetching..."
@@ -161,11 +161,11 @@ function Invoke-AddWorktree([string]$Branch, [bool]$Force) {
 
         if ($remoteBranchExists) {
             Write-Host "Found origin/$Branch after fetch, creating local tracking branch"
-            #git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch" --quiet
+            git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch" --quiet
         # 3. create new local branch
         } else {
             Write-Host "Creating new local branch '$Branch'"
-            #git worktree add @forceArg -b $Branch $worktreePath --quiet
+            git worktree add @forceArg -b $Branch $worktreePath --quiet
         }
     }
 }
