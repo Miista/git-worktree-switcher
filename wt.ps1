@@ -130,6 +130,7 @@ function Invoke-AddWorktree([string]$Branch, [bool]$Force) {
         $upstream = git config "branch.$Branch.remote" 2>$null
         $mergeRef = git config "branch.$Branch.merge" 2>$null
         if ($upstream -eq 'origin' -and $mergeRef -eq "refs/heads/$Branch") {
+            Write-Host "Set up to track origin/$Branch"
             git worktree add @forceArg $worktreePath $Branch --quiet
         } else {
             # local branch tracks a different remote or has no upstream — inform the user
@@ -145,21 +146,26 @@ function Invoke-AddWorktree([string]$Branch, [bool]$Force) {
         }
     # 1b. only remote exists — create local tracking branch
     } elseif ($remoteBranchExists) {
-        git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch" --quiet
+        Write-Host "Creating local branch tracking origin/$Branch"
+        #git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch" --quiet
     # 1c. only local exists — use it directly
     } elseif ($branchExists) {
-        git worktree add @forceArg $worktreePath $Branch --quiet
+        Write-Host "Using existing local branch '$Branch'"
+        #git worktree add @forceArg $worktreePath $Branch --quiet
     } else {
         # 2. fetch and check for remote branch again
+        Write-Host "Branch '$Branch' not found locally or on origin, fetching..."
         git fetch --quiet
         git rev-parse --verify "origin/$Branch" 2>$null | Out-Null
         $remoteBranchExists = $LASTEXITCODE -eq 0
 
         if ($remoteBranchExists) {
-            git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch" --quiet
+            Write-Host "Found origin/$Branch after fetch, creating local tracking branch"
+            #git worktree add @forceArg --track -b $Branch $worktreePath "origin/$Branch" --quiet
         # 3. create new local branch
         } else {
-            git worktree add @forceArg -b $Branch $worktreePath --quiet
+            Write-Host "Creating new local branch '$Branch'"
+            #git worktree add @forceArg -b $Branch $worktreePath --quiet
         }
     }
 }
