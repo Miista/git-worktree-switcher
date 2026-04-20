@@ -349,3 +349,164 @@ Describe 'Invoke-CreateWorktree' {
         (Get-Location).Path | Should -BeLike '*new-feature*'
     }
 }
+
+Describe 'Invoke-CheckWorktree' {
+    Context 'clean worktree (committed, pushed, tracked)' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            # Create branch, commit, push, then add as worktree
+            git checkout -b clean-branch --quiet 2>$null
+            New-Item -ItemType File -Path (Join-Path $script:repo.MainPath 'clean.txt') -Force | Out-Null
+            git add clean.txt
+            git commit -m "clean commit" --quiet
+            git push -u origin clean-branch --quiet 2>$null
+            git checkout master --quiet 2>$null
+            $wtPath = Join-Path $script:repo.Root 'clean-branch'
+            git worktree add $wtPath clean-branch --quiet 2>$null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'shows all checks passed' {
+            $output = (Invoke-CheckWorktree 'clean-branch') 6>&1 | Out-String
+            $output | Should -Match 'All checks passed'
+            $output | Should -Match 'No uncommitted changes'
+            $output | Should -Match 'No unpushed commits'
+        }
+    }
+
+    Context 'uncommitted changes' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            git checkout -b dirty-branch --quiet 2>$null
+            git push -u origin dirty-branch --quiet 2>$null
+            git checkout master --quiet 2>$null
+            $wtPath = Join-Path $script:repo.Root 'dirty-branch'
+            git worktree add $wtPath dirty-branch --quiet 2>$null
+            # Add an uncommitted file
+            New-Item -ItemType File -Path (Join-Path $wtPath 'dirty.txt') -Force | Out-Null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'shows uncommitted changes warning' {
+            $output = (Invoke-CheckWorktree 'dirty-branch') 6>&1 | Out-String
+            $output | Should -Match 'Has uncommitted changes'
+            $output | Should -Match 'Some checks failed'
+        }
+    }
+
+    Context 'no upstream tracking' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            $wtPath = Join-Path $script:repo.Root 'no-upstream'
+            git worktree add -b no-upstream $wtPath --quiet 2>$null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'shows no upstream warning' {
+            $output = (Invoke-CheckWorktree 'no-upstream') 6>&1 | Out-String
+            $output | Should -Match 'No upstream tracking branch'
+            $output | Should -Match 'Some checks failed'
+        }
+    }
+
+    Context 'unpushed commits' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            git checkout -b unpushed-branch --quiet 2>$null
+            git push -u origin unpushed-branch --quiet 2>$null
+            git checkout master --quiet 2>$null
+            $wtPath = Join-Path $script:repo.Root 'unpushed-branch'
+            git worktree add $wtPath unpushed-branch --quiet 2>$null
+            # Add a commit in the worktree that isn't pushed
+            Push-Location $wtPath
+            New-Item -ItemType File -Path (Join-Path $wtPath 'unpushed.txt') -Force | Out-Null
+            git add unpushed.txt
+            git commit -m "unpushed commit" --quiet
+            Pop-Location
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'shows unpushed commits warning' {
+            $output = (Invoke-CheckWorktree 'unpushed-branch') 6>&1 | Out-String
+            $output | Should -Match 'Has unpushed commits'
+            $output | Should -Match 'Some checks failed'
+        }
+    }
+
+    Context 'no name argument (uses current worktree)' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            git checkout -b current-check --quiet 2>$null
+            git push -u origin current-check --quiet 2>$null
+            git checkout master --quiet 2>$null
+            $script:wtPath = Join-Path $script:repo.Root 'current-check'
+            git worktree add $script:wtPath current-check --quiet 2>$null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        BeforeEach {
+            $script:savedLocation = Get-Location
+        }
+
+        AfterEach {
+            Set-Location $script:savedLocation
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'checks the current worktree when no name given' {
+            Set-Location $script:wtPath
+            $output = (Invoke-CheckWorktree '') 6>&1 | Out-String
+            $output | Should -Match 'current-check'
+            $output | Should -Match 'All checks passed'
+        }
+    }
+
+    Context 'not inside any worktree' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        BeforeEach {
+            $script:savedLocation = Get-Location
+        }
+
+        AfterEach {
+            Set-Location $script:savedLocation
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'shows not inside message' {
+            Set-Location $env:TEMP
+            $output = (Invoke-CheckWorktree '') 6>&1 | Out-String
+            $output | Should -Match 'Not inside any known worktree'
+        }
+    }
+}
