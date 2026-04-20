@@ -510,3 +510,205 @@ Describe 'Invoke-CheckWorktree' {
         }
     }
 }
+
+Describe 'Invoke-DoneWorktree' {
+    Context 'blocks when uncommitted changes (no --yes)' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            git checkout -b dirty-done --quiet 2>$null
+            git push -u origin dirty-done --quiet 2>$null
+            git checkout master --quiet 2>$null
+            $script:wtPath = Join-Path $script:repo.Root 'dirty-done'
+            git worktree add $script:wtPath dirty-done --quiet 2>$null
+            New-Item -ItemType File -Path (Join-Path $script:wtPath 'dirty.txt') -Force | Out-Null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'warns about uncommitted changes and keeps worktree' {
+            $output = (Invoke-DoneWorktree 'dirty-done' $false) 6>&1 | Out-String
+            $output | Should -Match 'uncommitted changes'
+            Test-Path $script:wtPath | Should -BeTrue
+        }
+    }
+
+    Context 'blocks when unpushed commits (no --yes)' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            git checkout -b unpushed-done --quiet 2>$null
+            git push -u origin unpushed-done --quiet 2>$null
+            git checkout master --quiet 2>$null
+            $script:wtPath = Join-Path $script:repo.Root 'unpushed-done'
+            git worktree add $script:wtPath unpushed-done --quiet 2>$null
+            Push-Location $script:wtPath
+            New-Item -ItemType File -Path (Join-Path $script:wtPath 'new.txt') -Force | Out-Null
+            git add new.txt
+            git commit -m "unpushed" --quiet
+            Pop-Location
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'warns about unpushed commits and keeps worktree' {
+            $output = (Invoke-DoneWorktree 'unpushed-done' $false) 6>&1 | Out-String
+            $output | Should -Match 'unpushed commits'
+            Test-Path $script:wtPath | Should -BeTrue
+        }
+    }
+
+    Context 'blocks when no upstream (no --yes)' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            $script:wtPath = Join-Path $script:repo.Root 'no-up-done'
+            git worktree add -b no-up-done $script:wtPath --quiet 2>$null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'warns about no upstream and keeps worktree' {
+            $output = (Invoke-DoneWorktree 'no-up-done' $false) 6>&1 | Out-String
+            $output | Should -Match 'no upstream tracking branch'
+            Test-Path $script:wtPath | Should -BeTrue
+        }
+    }
+
+    Context 'all clean — removes worktree and deletes branch' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            git checkout -b clean-done --quiet 2>$null
+            New-Item -ItemType File -Path (Join-Path $script:repo.MainPath 'clean.txt') -Force | Out-Null
+            git add clean.txt
+            git commit -m "clean commit" --quiet
+            git push -u origin clean-done --quiet 2>$null
+            git checkout master --quiet 2>$null
+            $script:wtPath = Join-Path $script:repo.Root 'clean-done'
+            git worktree add $script:wtPath clean-done --quiet 2>$null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'removes the worktree and deletes the branch' {
+            $null = (Invoke-DoneWorktree 'clean-done' $false) 6>&1
+            Test-Path $script:wtPath | Should -BeFalse
+            $branches = git branch --list 'clean-done'
+            $branches | Should -BeNullOrEmpty
+        }
+    }
+
+    Context 'force removes with --yes despite uncommitted changes' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            git checkout -b force-done --quiet 2>$null
+            git push -u origin force-done --quiet 2>$null
+            git checkout master --quiet 2>$null
+            $script:wtPath = Join-Path $script:repo.Root 'force-done'
+            git worktree add $script:wtPath force-done --quiet 2>$null
+            New-Item -ItemType File -Path (Join-Path $script:wtPath 'dirty.txt') -Force | Out-Null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'removes the worktree despite dirty state' {
+            $null = (Invoke-DoneWorktree 'force-done' $true) 6>&1
+            Test-Path $script:wtPath | Should -BeFalse
+        }
+    }
+
+    Context 'uses current worktree when no name given' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            git checkout -b current-done --quiet 2>$null
+            New-Item -ItemType File -Path (Join-Path $script:repo.MainPath 'c.txt') -Force | Out-Null
+            git add c.txt
+            git commit -m "current done commit" --quiet
+            git push -u origin current-done --quiet 2>$null
+            git checkout master --quiet 2>$null
+            $script:wtPath = Join-Path $script:repo.Root 'current-done'
+            git worktree add $script:wtPath current-done --quiet 2>$null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        BeforeEach {
+            $script:savedLocation = Get-Location
+        }
+
+        AfterEach {
+            Set-Location $script:savedLocation
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'switches to main and removes the current worktree' {
+            Set-Location $script:wtPath
+            $null = (Invoke-DoneWorktree '' $false) 6>&1
+            (Get-Location).Path | Should -Be $script:repo.MainPath
+            Test-Path $script:wtPath | Should -BeFalse
+        }
+    }
+
+    Context 'cannot clean up the main worktree' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        BeforeEach {
+            $script:savedLocation = Get-Location
+        }
+
+        AfterEach {
+            Set-Location $script:savedLocation
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'prints cannot clean up main worktree' {
+            Set-Location $script:repo.MainPath
+            $output = (Invoke-DoneWorktree '' $false) 6>&1 | Out-String
+            $output | Should -Match 'Cannot clean up the main worktree'
+        }
+    }
+
+    Context 'no matching worktree' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'prints no worktree found message' {
+            $output = (Invoke-DoneWorktree 'nonexistent' $false) 6>&1 | Out-String
+            $output | Should -Match 'No worktree matching'
+        }
+    }
+}
