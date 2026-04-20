@@ -796,3 +796,64 @@ Describe 'Invoke-RmWorktree' {
         }
     }
 }
+
+Describe 'Command dispatch' {
+    BeforeAll {
+        $script:repo = New-TestWorktreeRepo -Branches @('dispatch-a')
+        Set-Location $script:repo.MainPath
+    }
+
+    BeforeEach {
+        $script:savedLocation = Get-Location
+        Set-Location $script:repo.MainPath
+    }
+
+    AfterEach {
+        Set-Location $script:savedLocation
+    }
+
+    AfterAll {
+        Remove-TestRepo $script:repo.Root
+    }
+
+    It 'dispatches list command' {
+        $output = (. $script:ScriptPath list) 6>&1 | Out-String
+        $output | Should -Match 'dispatch-a'
+    }
+
+    It 'dispatches version command' {
+        $output = (. $script:ScriptPath version) 6>&1 | Out-String
+        $output | Should -Match 'Version:'
+    }
+
+    It 'dispatches help command' {
+        $output = (. $script:ScriptPath help) 6>&1 | Out-String
+        $output | Should -Match 'Usage:'
+    }
+
+    It 'dispatches -h flag' {
+        $output = (. $script:ScriptPath -h) 6>&1 | Out-String
+        $output | Should -Match 'Usage:'
+    }
+
+    It 'dispatches --help flag' {
+        $output = (. $script:ScriptPath -help) 6>&1 | Out-String
+        $output | Should -Match 'Usage:'
+    }
+
+    It 'dispatches current command' {
+        $output = (. $script:ScriptPath current) 6>&1 | Out-String
+        $output | Should -Match 'Current worktree:'
+    }
+
+    It 'dispatches - to go to main worktree' {
+        Set-Location $script:repo.Worktrees['dispatch-a']
+        $null = (. $script:ScriptPath '-') 6>&1
+        (Get-Location).Path | Should -Be $script:repo.MainPath
+    }
+
+    It 'dispatches bare name as worktree switch' {
+        $null = (. $script:ScriptPath 'dispatch-a') 6>&1
+        (Get-Location).Path | Should -BeLike '*dispatch-a*'
+    }
+}
