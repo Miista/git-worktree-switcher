@@ -259,6 +259,7 @@ function Invoke-DoneWorktree([string]$Name, [bool]$Yes) {
     $worktrees = Get-ParsedWorktrees
     $pwd = (Get-Location).Path.Replace('\', '/')
 
+    $switchToMain = $false
     if (-not $Name) {
         # no argument — use current worktree
         $match = $worktrees | Where-Object {
@@ -276,9 +277,7 @@ function Invoke-DoneWorktree([string]$Name, [bool]$Yes) {
             Write-Host "Cannot clean up the main worktree."
             return
         }
-        # switch to main worktree before cleaning up
-        Write-Host "Switching to main worktree at: $($worktrees[0].Path)"
-        Set-Location $worktrees[0].Path
+        $switchToMain = $true
     } else {
         $match = $worktrees | Where-Object { $_.Path -match [regex]::Escape($Name) -or $_.Branch -match [regex]::Escape($Name) } | Select-Object -First 1
         if (-not $match) {
@@ -287,14 +286,16 @@ function Invoke-DoneWorktree([string]$Name, [bool]$Yes) {
         }
         $matchPath = $match.Path.Replace('\', '/')
         if ($pwd -eq $matchPath -or $pwd.StartsWith($matchPath + '/')) {
-            # in the target worktree — switch to main first
-            Write-Host "Switching to main worktree at: $($worktrees[0].Path)"
-            Set-Location $worktrees[0].Path
+            $switchToMain = $true
         }
     }
     if (-not $Yes) {
         $allOk = Invoke-CheckWorktreeOne $match $worktrees[0].Branch $worktrees[0].Path
         if (-not $allOk) { return }
+    }
+    if ($switchToMain) {
+        Write-Host "Switching to main worktree at: $($worktrees[0].Path)"
+        Set-Location $worktrees[0].Path
     }
     # all clean — remove worktree and delete branch
     Write-Host "Removing worktree at: $($match.Path)"
