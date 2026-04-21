@@ -255,6 +255,9 @@ function Invoke-DoneWorktree([string]$Name, [bool]$Yes) {
     } else {
         git worktree remove $match.Path
     }
+    if ($LASTEXITCODE -eq 0) {
+        Invoke-RemoveLeftoverWorktreeDirectory $match.Path
+    }
     if ($LASTEXITCODE -eq 0 -and $match.Branch) {
         Write-Host "Deleting branch: $($match.Branch)"
         if ($Yes) {
@@ -326,6 +329,13 @@ function Invoke-CheckWorktree([string]$Name) {
     }
 }
 
+function Invoke-RemoveLeftoverWorktreeDirectory([string]$Path) {
+    if (Test-Path $Path) {
+        Write-Host "Removing leftover directory: $Path"
+        Remove-Item -Recurse -Force $Path
+    }
+}
+
 function Invoke-RmWorktree([string]$Name, [bool]$Force) {
     if (-not $Name) {
         Write-Host 'Usage: wt rm <branch-name> [--force]'
@@ -348,6 +358,9 @@ function Invoke-RmWorktree([string]$Name, [bool]$Force) {
         git worktree remove --force $match.Path
     } else {
         git worktree remove $match.Path
+    }
+    if ($LASTEXITCODE -eq 0) {
+        Invoke-RemoveLeftoverWorktreeDirectory $match.Path
     }
 }
 

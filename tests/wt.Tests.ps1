@@ -795,6 +795,30 @@ Describe 'Invoke-RmWorktree' {
             $output | Should -Match 'No worktree matching'
         }
     }
+
+    Context 'removes directory left behind when git deregistered the worktree but could not delete the folder' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            $script:wtPath = Join-Path $script:repo.Root 'leftover'
+            git worktree add -b leftover $script:wtPath --quiet 2>$null
+            # Simulate: git already deregistered the worktree (prune), but the directory remains
+            git worktree remove --force $script:wtPath 2>$null
+            # Directory is gone; recreate it to represent the leftover folder
+            New-Item -ItemType Directory -Path $script:wtPath -Force | Out-Null
+            New-Item -ItemType File -Path (Join-Path $script:wtPath 'stray.txt') -Force | Out-Null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'removes the leftover directory' {
+            $null = (Invoke-RemoveLeftoverWorktreeDirectory $script:wtPath) 6>&1
+            Test-Path $script:wtPath | Should -BeFalse
+        }
+    }
 }
 
 Describe 'Command dispatch' {

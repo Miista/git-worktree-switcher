@@ -69,6 +69,14 @@ help_message() {
 	echo -e "\twt check [worktree]: show the status of safety checks for a worktree."
 }
 
+remove_leftover_worktree_directory() {
+	local path="$1"
+	if [ -d "$path" ]; then
+		echo "Removing leftover directory: $path"
+		rm -rf "$path"
+	fi
+}
+
 rm_worktree() {
 	local name="$1"
 	local force="$2"
@@ -97,6 +105,9 @@ rm_worktree() {
 		git worktree remove --force "$match_path"
 	else
 		git worktree remove "$match_path"
+	fi
+	if [ $? -eq 0 ]; then
+		remove_leftover_worktree_directory "$match_path"
 	fi
 }
 
@@ -193,6 +204,9 @@ done_worktree() {
 		git worktree remove --force "$match_path"
 	else
 		git worktree remove "$match_path"
+	fi
+	if [ $? -eq 0 ]; then
+		remove_leftover_worktree_directory "$match_path"
 	fi
 	if [ $? -eq 0 ] && [ -n "$match_branch" ]; then
 		echo "Deleting branch: $match_branch"
