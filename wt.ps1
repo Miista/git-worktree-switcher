@@ -408,13 +408,21 @@ function Invoke-CheckWorktree([string]$Name, [bool]$All) {
         Write-Host $header
         Write-Host $separator
         foreach ($row in $rows) {
-            $line = $fmt -f $row.Worktree, $row.IsClean, $row.HasUpstream, $row.Unpushed, $row.Merged
-            # Color the line red if any column has ✗, green otherwise
-            if ($line -match '✗') {
-                Write-Host $line -ForegroundColor Red
-            } else {
-                Write-Host $line -ForegroundColor Green
+            $cells = @(
+                @{ Value = $row.Worktree;    Width = $colWorktree }
+                @{ Value = $row.IsClean;     Width = $colIsClean }
+                @{ Value = $row.HasUpstream; Width = $colHasUpstream }
+                @{ Value = $row.Unpushed;    Width = $colUnpushed }
+                @{ Value = $row.Merged;      Width = $colMerged }
+            )
+            for ($i = 0; $i -lt $cells.Count; $i++) {
+                $cell = $cells[$i]
+                $pad = $cell.Value.PadRight($cell.Width)
+                $color = if ($cell.Value -eq '✗') { 'Red' } elseif ($cell.Value -eq '✓') { 'Green' } else { 'Gray' }
+                $suffix = if ($i -lt $cells.Count - 1) { '  ' } else { '' }
+                Write-Host ($pad + $suffix) -ForegroundColor $color -NoNewline
             }
+            Write-Host ''
         }
         return
     }

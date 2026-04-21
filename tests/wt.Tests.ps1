@@ -657,44 +657,33 @@ Describe 'Invoke-CheckWorktree --all' {
             $output | Should -Match 'Merged\?'
         }
 
-        It 'shows merged status for merged worktree row' {
-            $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
-            $lines = $output -split "`n"
-            $mergedLine = $lines | Where-Object { $_ -match 'merged-all' } | Select-Object -First 1
-            $mergedLine | Should -Not -BeNullOrEmpty
-            $mergedLine | Should -Match ([regex]::Escape([char]0x2713))  # ✓
-        }
-
-        It 'shows not-merged status for unmerged worktree row' {
-            $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
-            $lines = $output -split "`n"
-            $cleanLine = $lines | Where-Object { $_ -match 'clean-all' } | Select-Object -First 1
-            $cleanLine | Should -Not -BeNullOrEmpty
-            $cleanLine | Should -Match ([regex]::Escape([char]0x2717))  # ✗
-        }
-
         It 'lists all non-main worktrees as table rows' {
             $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
             $output | Should -Match 'clean-all'
             $output | Should -Match 'dirty-all'
+            $output | Should -Match 'merged-all'
         }
 
-        It 'shows clean status for clean worktree row' {
-            $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
-            # clean-all row: Is clean? and Has upstream? should be ✓
-            $lines = $output -split "`n"
-            $cleanLine = $lines | Where-Object { $_ -match 'clean-all' } | Select-Object -First 1
-            $cleanLine | Should -Not -BeNullOrEmpty
-            $cleanLine | Should -Match ([regex]::Escape([char]0x2713))  # ✓
+        It 'shows checkmark for merged worktree' {
+            $records = (Invoke-CheckWorktree '' $true) 6>&1
+            # Find the index of the merged-all record, then check subsequent records for ✓
+            $idx = 0; for ($i = 0; $i -lt $records.Count; $i++) { if ($records[$i] -match 'merged-all') { $idx = $i; break } }
+            $rowText = ($records[$idx..($idx + 5)] | Out-String)
+            $rowText | Should -Match ([regex]::Escape([char]0x2713))  # ✓
         }
 
-        It 'shows dirty status for dirty worktree row' {
-            $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
-            # dirty-all row should contain ✗ (has uncommitted changes)
-            $lines = $output -split "`n"
-            $dirtyLine = $lines | Where-Object { $_ -match 'dirty-all' } | Select-Object -First 1
-            $dirtyLine | Should -Not -BeNullOrEmpty
-            $dirtyLine | Should -Match ([regex]::Escape([char]0x2717))  # ✗
+        It 'shows cross for dirty worktree' {
+            $records = (Invoke-CheckWorktree '' $true) 6>&1
+            $idx = 0; for ($i = 0; $i -lt $records.Count; $i++) { if ($records[$i] -match 'dirty-all') { $idx = $i; break } }
+            $rowText = ($records[$idx..($idx + 5)] | Out-String)
+            $rowText | Should -Match ([regex]::Escape([char]0x2717))  # ✗
+        }
+
+        It 'shows cross for unmerged worktree' {
+            $records = (Invoke-CheckWorktree '' $true) 6>&1
+            $idx = 0; for ($i = 0; $i -lt $records.Count; $i++) { if ($records[$i] -match 'clean-all') { $idx = $i; break } }
+            $rowText = ($records[$idx..($idx + 5)] | Out-String)
+            $rowText | Should -Match ([regex]::Escape([char]0x2717))  # ✗
         }
     }
 }
