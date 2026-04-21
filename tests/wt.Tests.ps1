@@ -797,6 +797,99 @@ Describe 'Invoke-RmWorktree' {
     }
 }
 
+Describe 'Invoke-PruneWorktrees' {
+    Context 'no orphaned directories' {
+        BeforeAll {
+            $script:repo = New-TestWorktreeRepo -Branches @('prune-a')
+            Set-Location $script:repo.MainPath
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'reports nothing to clean up' {
+            $output = (Invoke-PruneWorktrees) 6>&1 | Out-String
+            $output | Should -Match 'Nothing to clean up'
+        }
+    }
+
+    Context 'stale git metadata (directory deleted manually)' {
+        BeforeAll {
+            $script:repo = New-TestWorktreeRepo -Branches @('stale-branch')
+            Set-Location $script:repo.MainPath
+            # Manually delete the worktree directory without unregistering it
+            $script:stalePath = $script:repo.Worktrees['stale-branch']
+            Remove-Item -Recurse -Force $script:stalePath
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'prunes stale git metadata' {
+            # Before prune, git still lists the stale worktree
+            $before = git worktree list --porcelain | Out-String
+            $before | Should -Match 'stale-branch'
+
+            $null = (Invoke-PruneWorktrees) 6>&1
+
+            # After prune, git no longer lists it
+            $after = git worktree list --porcelain | Out-String
+            $after | Should -Not -Match 'stale-branch'
+        }
+    }
+
+    Context 'orphaned directory (git metadata removed but directory left behind)' {
+        BeforeAll {
+            $script:repo = New-TestWorktreeRepo -Branches @('orphan-branch')
+            Set-Location $script:repo.MainPath
+            $script:orphanPath = $script:repo.Worktrees['orphan-branch']
+            # Simulate a partially-failed rm: unregister from git but leave directory on disk
+            git worktree remove --force $script:orphanPath 2>$null
+            # Recreate the directory with a .git file to simulate leftover
+            New-Item -ItemType Directory -Path $script:orphanPath -Force | Out-Null
+            $gitDirPath = Join-Path $script:repo.MainPath ".git/worktrees/orphan-branch"
+            New-Item -ItemType Directory -Path $gitDirPath -Force | Out-Null
+            Set-Content -Path (Join-Path $script:orphanPath '.git') -Value "gitdir: $($gitDirPath.Replace('\', '/'))"
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'removes orphaned directories' {
+            $output = (Invoke-PruneWorktrees) 6>&1 | Out-String
+            $output | Should -Match 'orphan'
+            Test-Path $script:orphanPath | Should -BeFalse
+        }
+    }
+
+    Context 'leaves unrelated sibling directories alone' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            # Create a sibling directory that is NOT a worktree (no .git file)
+            $script:siblingPath = Join-Path $script:repo.Root 'unrelated-dir'
+            New-Item -ItemType Directory -Path $script:siblingPath -Force | Out-Null
+            New-Item -ItemType File -Path (Join-Path $script:siblingPath 'something.txt') -Force | Out-Null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'does not remove unrelated directories' {
+            $null = (Invoke-PruneWorktrees) 6>&1
+            Test-Path $script:siblingPath | Should -BeTrue
+        }
+    }
+}
+
 Describe 'Command dispatch' {
     BeforeAll {
         $script:repo = New-TestWorktreeRepo -Branches @('dispatch-a')
@@ -855,5 +948,10 @@ Describe 'Command dispatch' {
     It 'dispatches bare name as worktree switch' {
         $null = (. $script:ScriptPath 'dispatch-a') 6>&1
         (Get-Location).Path | Should -BeLike '*dispatch-a*'
+    }
+
+    It 'dispatches prune command' {
+        $output = (. $script:ScriptPath prune) 6>&1 | Out-String
+        $output | Should -Match 'Nothing to clean up|Removed|Pruned'
     }
 }
