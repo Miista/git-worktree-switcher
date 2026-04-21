@@ -611,21 +611,36 @@ Describe 'Invoke-CheckWorktree --all' {
             Remove-TestRepo $script:repo.Root
         }
 
-        It 'lists all non-main worktrees' {
+        It 'shows a table with column headers' {
+            $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
+            $output | Should -Match 'Worktree'
+            $output | Should -Match 'Uncommitted'
+            $output | Should -Match 'Tracking'
+            $output | Should -Match 'Unpushed'
+        }
+
+        It 'lists all non-main worktrees as table rows' {
             $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
             $output | Should -Match 'clean-all'
             $output | Should -Match 'dirty-all'
         }
 
-        It 'shows ready for clean worktrees' {
+        It 'shows clean status for clean worktree row' {
             $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
-            $output | Should -Match 'Ready for.*clean-all'
+            # clean-all row: no ✗ on that line (all checks pass)
+            $lines = $output -split "`n"
+            $cleanLine = $lines | Where-Object { $_ -match 'clean-all' } | Select-Object -First 1
+            $cleanLine | Should -Not -BeNullOrEmpty
+            $cleanLine | Should -Not -Match ([regex]::Escape([char]0x2717))  # ✗
         }
 
-        It 'shows checks failed for dirty worktrees' {
+        It 'shows dirty status for dirty worktree row' {
             $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
-            $output | Should -Match 'checks failed.*dirty-all|dirty-all'
-            $output | Should -Match 'Has uncommitted changes'
+            # dirty-all row should contain ✗ (has uncommitted changes)
+            $lines = $output -split "`n"
+            $dirtyLine = $lines | Where-Object { $_ -match 'dirty-all' } | Select-Object -First 1
+            $dirtyLine | Should -Not -BeNullOrEmpty
+            $dirtyLine | Should -Match ([regex]::Escape([char]0x2717))  # ✗
         }
     }
 }

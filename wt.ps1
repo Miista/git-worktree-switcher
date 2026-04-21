@@ -359,11 +359,48 @@ function Invoke-CheckWorktree([string]$Name, [bool]$All) {
             Write-Host "No non-main worktrees found."
             return
         }
+
+        # Collect status for each worktree
+        $rows = @()
         foreach ($wt in $nonMain) {
-            Write-Host "Checking worktree '$($wt.Branch)' at: $($wt.Path)"
-            Write-Host ''
-            $null = Invoke-CheckWorktreeOne $wt
-            Write-Host ''
+            $path = $wt.Path
+            $uncommitted = if (git -C $path status --porcelain) { '✗' } else { '✓' }
+            $upstream = git -C $path rev-parse --abbrev-ref '@{upstream}' 2>$null
+            if ($LASTEXITCODE -ne 0 -or -not $upstream) {
+                $tracking = '✗'
+                $unpushed = '-'
+            } else {
+                $tracking = '✓'
+                $unpushed = if (git -C $path log "$upstream..HEAD" --oneline) { '✗' } else { '✓' }
+            }
+            $rows += [PSCustomObject]@{
+                Worktree    = $wt.Branch
+                Uncommitted = $uncommitted
+                Tracking    = $tracking
+                Unpushed    = $unpushed
+            }
+        }
+
+        # Calculate column widths
+        $colWorktree    = [Math]::Max(8,  ($rows | ForEach-Object { $_.Worktree.Length }    | Measure-Object -Maximum).Maximum)
+        $colUncommitted = [Math]::Max(11, ($rows | ForEach-Object { $_.Uncommitted.Length } | Measure-Object -Maximum).Maximum)
+        $colTracking    = [Math]::Max(8,  ($rows | ForEach-Object { $_.Tracking.Length }    | Measure-Object -Maximum).Maximum)
+        $colUnpushed    = [Math]::Max(8,  ($rows | ForEach-Object { $_.Unpushed.Length }    | Measure-Object -Maximum).Maximum)
+
+        $fmt = "{0,-$colWorktree}  {1,-$colUncommitted}  {2,-$colTracking}  {3,-$colUnpushed}"
+        $header = $fmt -f 'Worktree', 'Uncommitted', 'Tracking', 'Unpushed'
+        $separator = ('-' * $header.Length)
+
+        Write-Host $header
+        Write-Host $separator
+        foreach ($row in $rows) {
+            $line = $fmt -f $row.Worktree, $row.Uncommitted, $row.Tracking, $row.Unpushed
+            # Color the line red if any column has ✗, green otherwise
+            if ($line -match '✗') {
+                Write-Host $line -ForegroundColor Red
+            } else {
+                Write-Host $line -ForegroundColor Green
+            }
         }
         return
     }
