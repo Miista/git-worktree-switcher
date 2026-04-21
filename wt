@@ -67,6 +67,7 @@ help_message() {
 	echo -e "\twt rm <worktree> [--force]: remove the worktree matching <worktree>."
 	echo -e "\twt done [worktree]: safely clean up a worktree after all changes are pushed."
 	echo -e "\twt check [worktree]: show the status of safety checks for a worktree."
+	echo -e "\twt check --all: show safety check status for all non-main worktrees."
 }
 
 remove_leftover_worktree_directory() {
@@ -218,8 +219,86 @@ done_worktree() {
 	fi
 }
 
+check_worktree_one() {
+	local path="$1"
+	local name="$2"
+	local all_ok=true
+
+	# Check 1: uncommitted changes
+	local status
+	status=$(git -C "$path" status --porcelain)
+	if [ -n "$status" ]; then
+		echo "  ✗ Has uncommitted changes"
+		all_ok=false
+	else
+		echo "  ✓ No uncommitted changes"
+	fi
+
+	# Check 2: upstream tracking
+	local upstream
+	upstream=$(git -C "$path" rev-parse --abbrev-ref "@{upstream}" 2>/dev/null)
+	if [ -z "$upstream" ]; then
+		echo "  ✗ No upstream tracking branch"
+		all_ok=false
+	else
+		echo "  ✓ Tracking $upstream"
+
+		# Check 3: unpushed commits (only if upstream exists)
+		local unpushed
+		unpushed=$(git -C "$path" log "$upstream..HEAD" --oneline)
+		if [ -n "$unpushed" ]; then
+			echo "  ✗ Has unpushed commits"
+			all_ok=false
+		else
+			echo "  ✓ No unpushed commits"
+		fi
+	fi
+
+	echo ""
+	if [[ "$all_ok" == true ]]; then
+		echo "  ✓ Ready for 'wt done $name'."
+	else
+		echo "  Some checks failed. Resolve them before running 'wt done $name'."
+	fi
+	[[ "$all_ok" == true ]]
+}
+
 check_worktree() {
 	local name="$1"
+	local all="$2"
+
+	if [[ "$all" == "--all" ]]; then
+		local found=false
+		local skip_main=true
+		local wt_path="" wt_branch=""
+		while IFS= read -r line; do
+			case "$line" in
+				worktree\ *)
+					wt_path="${line#worktree }"
+					wt_branch=""
+					;;
+				branch\ *)
+					wt_branch="${line#branch refs/heads/}"
+					;;
+				"")
+					if [[ "$skip_main" == true ]]; then
+						skip_main=false
+					elif [ -n "$wt_branch" ]; then
+						echo "Checking worktree '$wt_branch' at: $wt_path"
+						echo ""
+						check_worktree_one "$wt_path" "$wt_branch"
+						echo ""
+						found=true
+					fi
+					;;
+			esac
+		done < <(git worktree list --porcelain)
+		if [[ "$found" == false ]]; then
+			echo "No non-main worktrees found."
+		fi
+		return
+	fi
+
 	local match_path match_branch
 	if [ -z "$name" ]; then
 		local current_path
@@ -248,45 +327,7 @@ check_worktree() {
 
 	echo "Checking worktree '$name' at: $match_path"
 	echo ""
-	local all_ok=true
-
-	# Check 1: uncommitted changes
-	local status
-	status=$(git -C "$match_path" status --porcelain)
-	if [ -n "$status" ]; then
-		echo "  ✗ Has uncommitted changes"
-		all_ok=false
-	else
-		echo "  ✓ No uncommitted changes"
-	fi
-
-	# Check 2: upstream tracking
-	local upstream
-	upstream=$(git -C "$match_path" rev-parse --abbrev-ref "@{upstream}" 2>/dev/null)
-	if [ -z "$upstream" ]; then
-		echo "  ✗ No upstream tracking branch"
-		all_ok=false
-	else
-		echo "  ✓ Tracking $upstream"
-
-		# Check 3: unpushed commits (only if upstream exists)
-		local unpushed
-		unpushed=$(git -C "$match_path" log "$upstream..HEAD" --oneline)
-		if [ -n "$unpushed" ]; then
-			echo "  ✗ Has unpushed commits"
-			all_ok=false
-		else
-			echo "  ✓ No unpushed commits"
-		fi
-	fi
-
-	echo ""
-	if [[ "$all_ok" == true ]]; then
-		echo "All checks passed. Ready for 'wt done $name'."
-	else
-		echo "Some checks failed. Resolve them before running 'wt done $name'."
-		return 1
-	fi
+	check_worktree_one "$match_path" "$name"
 }
 
 get_worktree_path() {
@@ -509,7 +550,7 @@ done)
 	done_worktree "${args[1]}" "${args[2]}"
 	;;
 check)
-	check_worktree "${args[1]}"
+	check_worktree "${args[1]}" "${args[2]}"
 	;;
 *)
 	if [[ "$is_interactive" == true ]]; then

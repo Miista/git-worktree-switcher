@@ -21,6 +21,7 @@ param(
 
 $isForce = $force.IsPresent -or $ForceArg -eq '--force' -or $ForceArg -eq '-force'
 $isYes = $yes.IsPresent -or $ForceArg -eq '--yes' -or $ForceArg -eq '-yes'
+$isAll = $Arg -eq '--all' -or $Arg -eq '-all'
 
 $VERSION = '0.1.3'
 
@@ -42,6 +43,7 @@ function Show-Help {
     Write-Host '  wt rm <worktree> [--force]     remove the worktree matching <worktree>.'
     Write-Host '  wt done [worktree]             safely clean up a worktree after all changes are pushed.'
     Write-Host '  wt check [worktree]            show the status of safety checks for a worktree.'
+    Write-Host '  wt check --all                 show safety check status for all non-main worktrees.'
 }
 
 function Get-WorktreeList {
@@ -306,9 +308,65 @@ function Invoke-DoneWorktree([string]$Name, [bool]$Yes) {
     }
 }
 
-function Invoke-CheckWorktree([string]$Name) {
+function Invoke-CheckWorktreeOne($worktree) {
+    $name = $worktree.Branch
+    $path = $worktree.Path
+    $allOk = $true
+
+    # Check 1: uncommitted changes
+    $status = git -C $path status --porcelain
+    if ($status) {
+        Write-Host "  ✗ Has uncommitted changes" -ForegroundColor Red
+        $allOk = $false
+    } else {
+        Write-Host "  ✓ No uncommitted changes" -ForegroundColor Green
+    }
+
+    # Check 2: upstream tracking
+    $upstream = git -C $path rev-parse --abbrev-ref '@{upstream}' 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $upstream) {
+        Write-Host "  ✗ No upstream tracking branch" -ForegroundColor Red
+        $allOk = $false
+    } else {
+        Write-Host "  ✓ Tracking $upstream" -ForegroundColor Green
+
+        # Check 3: unpushed commits (only if upstream exists)
+        $unpushed = git -C $path log "$upstream..HEAD" --oneline
+        if ($unpushed) {
+            Write-Host "  ✗ Has unpushed commits" -ForegroundColor Red
+            $allOk = $false
+        } else {
+            Write-Host "  ✓ No unpushed commits" -ForegroundColor Green
+        }
+    }
+
+    Write-Host ''
+    if ($allOk) {
+        Write-Host "  ✓ Ready for 'wt done $name'." -ForegroundColor Green
+    } else {
+        Write-Host "  Some checks failed. Resolve them before running 'wt done $name'." -ForegroundColor Red
+    }
+    return $allOk
+}
+
+function Invoke-CheckWorktree([string]$Name, [bool]$All) {
     $worktrees = Get-ParsedWorktrees
     $pwd = (Get-Location).Path.Replace('\', '/')
+
+    if ($All) {
+        $nonMain = $worktrees | Select-Object -Skip 1
+        if ($nonMain.Count -eq 0) {
+            Write-Host "No non-main worktrees found."
+            return
+        }
+        foreach ($wt in $nonMain) {
+            Write-Host "Checking worktree '$($wt.Branch)' at: $($wt.Path)"
+            Write-Host ''
+            $null = Invoke-CheckWorktreeOne $wt
+            Write-Host ''
+        }
+        return
+    }
 
     if (-not $Name) {
         $match = $worktrees | Where-Object {
@@ -330,41 +388,8 @@ function Invoke-CheckWorktree([string]$Name) {
 
     Write-Host "Checking worktree '$Name' at: $($match.Path)"
     Write-Host ''
-    $allOk = $true
-
-    # Check 1: uncommitted changes
-    $status = git -C $match.Path status --porcelain
-    if ($status) {
-        Write-Host "  ✗ Has uncommitted changes" -ForegroundColor Red
-        $allOk = $false
-    } else {
-        Write-Host "  ✓ No uncommitted changes" -ForegroundColor Green
-    }
-
-    # Check 2: upstream tracking
-    $upstream = git -C $match.Path rev-parse --abbrev-ref '@{upstream}' 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not $upstream) {
-        Write-Host "  ✗ No upstream tracking branch" -ForegroundColor Red
-        $allOk = $false
-    } else {
-        Write-Host "  ✓ Tracking $upstream" -ForegroundColor Green
-
-        # Check 3: unpushed commits (only if upstream exists)
-        $unpushed = git -C $match.Path log "$upstream..HEAD" --oneline
-        if ($unpushed) {
-            Write-Host "  ✗ Has unpushed commits" -ForegroundColor Red
-            $allOk = $false
-        } else {
-            Write-Host "  ✓ No unpushed commits" -ForegroundColor Green
-        }
-    }
-
-    Write-Host ''
-    if ($allOk) {
-        Write-Host "All checks passed. Ready for 'wt done $Name'." -ForegroundColor Green
-    } else {
-        Write-Host "Some checks failed. Resolve them before running 'wt done $Name'." -ForegroundColor Red
-    }
+    $allOk = Invoke-CheckWorktreeOne $match
+    if (-not $allOk) { return }
 }
 
 function Invoke-RemoveLeftoverWorktreeDirectory([string]$Path) {
@@ -449,6 +474,6 @@ switch ($Command) {
     'create'  { Invoke-CreateWorktree $Arg $isForce }
     'rm'      { Invoke-RmWorktree $Arg $isForce }
     'done'    { Invoke-DoneWorktree $Arg $isYes }
-    'check'   { Invoke-CheckWorktree $Arg }
+    'check'   { Invoke-CheckWorktree $Arg $isAll }
     default   { Invoke-Switch $Command }
 }

@@ -442,7 +442,7 @@ Describe 'Invoke-CheckWorktree' {
 
         It 'shows all checks passed' {
             $output = (Invoke-CheckWorktree 'clean-branch') 6>&1 | Out-String
-            $output | Should -Match 'All checks passed'
+            $output | Should -Match 'Ready for'
             $output | Should -Match 'No uncommitted changes'
             $output | Should -Match 'No unpushed commits'
         }
@@ -550,7 +550,7 @@ Describe 'Invoke-CheckWorktree' {
             Set-Location $script:wtPath
             $output = (Invoke-CheckWorktree '') 6>&1 | Out-String
             $output | Should -Match 'current-check'
-            $output | Should -Match 'All checks passed'
+            $output | Should -Match 'Ready for'
         }
     }
 
@@ -617,14 +617,15 @@ Describe 'Invoke-CheckWorktree --all' {
             $output | Should -Match 'dirty-all'
         }
 
-        It 'shows pass for clean worktrees' {
+        It 'shows ready for clean worktrees' {
             $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
-            $output | Should -Match '✓.*clean-all|clean-all.*✓'
+            $output | Should -Match 'Ready for.*clean-all'
         }
 
-        It 'shows fail for dirty worktrees' {
+        It 'shows checks failed for dirty worktrees' {
             $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
-            $output | Should -Match '✗.*dirty-all|dirty-all.*✗'
+            $output | Should -Match 'checks failed.*dirty-all|dirty-all'
+            $output | Should -Match 'Has uncommitted changes'
         }
     }
 }
