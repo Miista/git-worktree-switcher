@@ -368,7 +368,7 @@ function Invoke-CheckWorktree([string]$Name, [bool]$All) {
             $upstream = git -C $path rev-parse --abbrev-ref '@{upstream}' 2>$null
             if ($LASTEXITCODE -ne 0 -or -not $upstream) {
                 $tracking = '✗'
-                $unpushed = '-'
+                $unpushed = '?'
             } else {
                 $tracking = '✓'
                 $unpushed = if (git -C $path log "$upstream..HEAD" --oneline) { '✗' } else { '✓' }
