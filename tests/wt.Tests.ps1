@@ -604,6 +604,16 @@ Describe 'Invoke-CheckWorktree --all' {
             git worktree add $script:dirtyPath dirty-all --quiet 2>$null
             New-Item -ItemType File -Path (Join-Path $script:dirtyPath 'dirty.txt') -Force | Out-Null
 
+            # merged-all: branch is merged into master
+            git checkout -b merged-all --quiet 2>$null
+            New-Item -ItemType File -Path (Join-Path $script:repo.MainPath 'ma.txt') -Force | Out-Null
+            git add ma.txt
+            git commit -m "merged-all commit" --quiet
+            git checkout master --quiet 2>$null
+            git merge merged-all --quiet 2>$null
+            $script:mergedPath = Join-Path $script:repo.Root 'merged-all'
+            git worktree add $script:mergedPath merged-all --quiet 2>$null
+
             $null = (. $script:ScriptPath help) 6>&1
         }
 
@@ -617,6 +627,23 @@ Describe 'Invoke-CheckWorktree --all' {
             $output | Should -Match 'Is clean\?'
             $output | Should -Match 'Has upstream\?'
             $output | Should -Match 'Unpushed\?'
+            $output | Should -Match 'Merged\?'
+        }
+
+        It 'shows merged status for merged worktree row' {
+            $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
+            $lines = $output -split "`n"
+            $mergedLine = $lines | Where-Object { $_ -match 'merged-all' } | Select-Object -First 1
+            $mergedLine | Should -Not -BeNullOrEmpty
+            $mergedLine | Should -Match ([regex]::Escape([char]0x2713))  # ✓
+        }
+
+        It 'shows not-merged status for unmerged worktree row' {
+            $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
+            $lines = $output -split "`n"
+            $cleanLine = $lines | Where-Object { $_ -match 'clean-all' } | Select-Object -First 1
+            $cleanLine | Should -Not -BeNullOrEmpty
+            $cleanLine | Should -Match ([regex]::Escape([char]0x2717))  # ✗
         }
 
         It 'lists all non-main worktrees as table rows' {
@@ -627,11 +654,11 @@ Describe 'Invoke-CheckWorktree --all' {
 
         It 'shows clean status for clean worktree row' {
             $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
-            # clean-all row: no ✗ on that line (all checks pass)
+            # clean-all row: Is clean? and Has upstream? should be ✓
             $lines = $output -split "`n"
             $cleanLine = $lines | Where-Object { $_ -match 'clean-all' } | Select-Object -First 1
             $cleanLine | Should -Not -BeNullOrEmpty
-            $cleanLine | Should -Not -Match ([regex]::Escape([char]0x2717))  # ✗
+            $cleanLine | Should -Match ([regex]::Escape([char]0x2713))  # ✓
         }
 
         It 'shows dirty status for dirty worktree row' {

@@ -361,6 +361,7 @@ function Invoke-CheckWorktree([string]$Name, [bool]$All) {
         }
 
         # Collect status for each worktree
+        $mainBranch = $worktrees[0].Branch
         $rows = @()
         foreach ($wt in $nonMain) {
             $path = $wt.Path
@@ -373,11 +374,14 @@ function Invoke-CheckWorktree([string]$Name, [bool]$All) {
                 $tracking = '✓'
                 $unpushed = if (git -C $path log "$upstream..HEAD" --oneline) { '✗' } else { '✓' }
             }
+            $mergedBranches = git -C $worktrees[0].Path branch --merged $mainBranch 2>$null
+            $merged = if ($mergedBranches -match ('(^|\s)' + [regex]::Escape($wt.Branch) + '\s*$')) { '✓' } else { '✗' }
             $rows += [PSCustomObject]@{
                 Worktree     = $wt.Branch
                 IsClean      = $uncommitted
                 HasUpstream  = $tracking
                 Unpushed     = $unpushed
+                Merged       = $merged
             }
         }
 
@@ -386,15 +390,16 @@ function Invoke-CheckWorktree([string]$Name, [bool]$All) {
         $colIsClean     = [Math]::Max(9,  ($rows | ForEach-Object { $_.IsClean.Length }     | Measure-Object -Maximum).Maximum)
         $colHasUpstream = [Math]::Max(12, ($rows | ForEach-Object { $_.HasUpstream.Length } | Measure-Object -Maximum).Maximum)
         $colUnpushed    = [Math]::Max(9,  ($rows | ForEach-Object { $_.Unpushed.Length }    | Measure-Object -Maximum).Maximum)
+        $colMerged      = [Math]::Max(7,  ($rows | ForEach-Object { $_.Merged.Length }      | Measure-Object -Maximum).Maximum)
 
-        $fmt = "{0,-$colWorktree}  {1,-$colIsClean}  {2,-$colHasUpstream}  {3,-$colUnpushed}"
-        $header = $fmt -f 'Worktree', 'Is clean?', 'Has upstream?', 'Unpushed?'
+        $fmt = "{0,-$colWorktree}  {1,-$colIsClean}  {2,-$colHasUpstream}  {3,-$colUnpushed}  {4,-$colMerged}"
+        $header = $fmt -f 'Worktree', 'Is clean?', 'Has upstream?', 'Unpushed?', 'Merged?'
         $separator = ('-' * $header.Length)
 
         Write-Host $header
         Write-Host $separator
         foreach ($row in $rows) {
-            $line = $fmt -f $row.Worktree, $row.IsClean, $row.HasUpstream, $row.Unpushed
+            $line = $fmt -f $row.Worktree, $row.IsClean, $row.HasUpstream, $row.Unpushed, $row.Merged
             # Color the line red if any column has ✗, green otherwise
             if ($line -match '✗') {
                 Write-Host $line -ForegroundColor Red
