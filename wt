@@ -240,7 +240,7 @@ check_worktree_one() {
 	fi
 
 	# Check 2: upstream tracking
-	local upstream
+	local upstream has_unpushed=false
 	upstream=$(git -C "$path" rev-parse --abbrev-ref "@{upstream}" 2>/dev/null)
 	if [ -z "$upstream" ]; then
 		echo "  ✗ No upstream tracking branch"
@@ -254,33 +254,38 @@ check_worktree_one() {
 		if [ -n "$unpushed" ]; then
 			echo "  ✗ Has unpushed commits"
 			all_ok=false
+			has_unpushed=true
 		else
 			echo "  ✓ No unpushed commits"
 		fi
 	fi
 
-	# Check 4: merged into main
+	# Check 4: merged into main (skip squash detection if there are unpushed commits)
 	local merged_branches
 	merged_branches=$(git -C "$main_path" branch --merged "$main_branch" 2>/dev/null)
 	if echo "$merged_branches" | grep -qE "(^|[[:space:]])${name}[[:space:]]*$"; then
 		echo "  ✓ Merged into $main_branch"
-	else
-		local merge_base squash_diff main_ref
-		if git -C "$main_path" rev-parse --verify "origin/$main_branch" 2>/dev/null; then
+	elif [[ "$has_unpushed" == false ]]; then
+		local merge_base squash_diff main_ref unique_commits
+		if git -C "$main_path" rev-parse --verify "origin/$main_branch" >/dev/null 2>&1; then
 			main_ref="origin/$main_branch"
 		else
 			main_ref="$main_branch"
 		fi
 		merge_base=$(git -C "$main_path" merge-base "$main_ref" "$name" 2>/dev/null)
+		unique_commits=$([ -n "$merge_base" ] && git -C "$main_path" log "$merge_base..$name" --oneline 2>/dev/null || echo '')
 		if [ -n "$merge_base" ]; then
 			squash_diff=$(git -C "$main_path" merge-tree "$merge_base" "$main_ref" "$name" 2>/dev/null)
 		fi
-		if [ -n "$merge_base" ] && [ -z "$squash_diff" ]; then
+		if [ -n "$unique_commits" ] && [ -n "$merge_base" ] && [ -z "$squash_diff" ]; then
 			echo "  ✓ Squash-merged into $main_branch"
 		else
 			echo "  ✗ Not merged into $main_branch"
 			all_ok=false
 		fi
+	else
+		echo "  ✗ Not merged into $main_branch"
+		all_ok=false
 	fi
 
 	echo ""

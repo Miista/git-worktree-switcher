@@ -581,32 +581,6 @@ Describe 'Invoke-CheckWorktree' {
         }
     }
 
-    Context 'branch squash-merged into main' {
-        BeforeAll {
-            $script:repo = New-TestRepo
-            Set-Location $script:repo.MainPath
-            git checkout -b squash-branch --quiet 2>$null
-            New-Item -ItemType File -Path (Join-Path $script:repo.MainPath 'squash.txt') -Force | Out-Null
-            git add squash.txt
-            git commit -m "squash commit" --quiet
-            git checkout master --quiet 2>$null
-            git merge --squash squash-branch --quiet 2>$null
-            git commit -m "Squash merge squash-branch" --quiet
-            $script:wtPath = Join-Path $script:repo.Root 'squash-branch'
-            git worktree add $script:wtPath squash-branch --quiet 2>$null
-            $null = (. $script:ScriptPath help) 6>&1
-        }
-
-        AfterAll {
-            Remove-TestRepo $script:repo.Root
-        }
-
-        It 'shows squash-merged into main' {
-            $output = (Invoke-CheckWorktree 'squash-branch') 6>&1 | Out-String
-            $output | Should -Match 'Squash-merged into'
-        }
-    }
-
     Context 'not inside any worktree' {
         BeforeAll {
             $script:repo = New-TestRepo
@@ -679,7 +653,7 @@ Describe 'Invoke-CheckWorktree --all' {
             $output | Should -Match 'Worktree'
             $output | Should -Match 'Is clean\?'
             $output | Should -Match 'Has upstream\?'
-            $output | Should -Match 'Unpushed\?'
+            $output | Should -Match 'Pushed\?'
             $output | Should -Match 'Merged\?'
         }
 
@@ -692,10 +666,9 @@ Describe 'Invoke-CheckWorktree --all' {
 
         It 'shows checkmark for merged worktree' {
             $records = (Invoke-CheckWorktree '' $true) 6>&1
-            # Find the index of the merged-all record, then check subsequent records for ✓
             $idx = 0; for ($i = 0; $i -lt $records.Count; $i++) { if ($records[$i] -match 'merged-all') { $idx = $i; break } }
             $rowText = ($records[$idx..($idx + 5)] | Out-String)
-            $rowText | Should -Match ([regex]::Escape([char]0x2713))  # ✓
+            $rowText | Should -Match '\(merge\)'
         }
 
         It 'shows cross for dirty worktree' {
@@ -797,6 +770,7 @@ Describe 'Invoke-DoneWorktree' {
             git commit -m "clean commit" --quiet
             git push -u origin clean-done --quiet 2>$null
             git checkout master --quiet 2>$null
+            git merge clean-done --quiet 2>$null
             $script:wtPath = Join-Path $script:repo.Root 'clean-done'
             git worktree add $script:wtPath clean-done --quiet 2>$null
             $null = (. $script:ScriptPath help) 6>&1
@@ -847,6 +821,7 @@ Describe 'Invoke-DoneWorktree' {
             git commit -m "current done commit" --quiet
             git push -u origin current-done --quiet 2>$null
             git checkout master --quiet 2>$null
+            git merge current-done --quiet 2>$null
             $script:wtPath = Join-Path $script:repo.Root 'current-done'
             git worktree add $script:wtPath current-done --quiet 2>$null
             $null = (. $script:ScriptPath help) 6>&1

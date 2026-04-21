@@ -332,6 +332,7 @@ function Invoke-CheckWorktreeOne($worktree, [string]$MainBranch, [string]$MainPa
 
     # Check 2: upstream tracking
     $upstream = git -C $path rev-parse --abbrev-ref '@{upstream}' 2>$null
+    $hasUnpushed = $false
     if ($LASTEXITCODE -ne 0 -or -not $upstream) {
         Write-Host "  ✗ No upstream tracking branch" -ForegroundColor Red
         $allOk = $false
@@ -343,27 +344,32 @@ function Invoke-CheckWorktreeOne($worktree, [string]$MainBranch, [string]$MainPa
         if ($unpushed) {
             Write-Host "  ✗ Has unpushed commits" -ForegroundColor Red
             $allOk = $false
+            $hasUnpushed = $true
         } else {
             Write-Host "  ✓ No unpushed commits" -ForegroundColor Green
         }
     }
 
-    # Check 4: merged into main
+    # Check 4: merged into main (skip squash detection if there are unpushed commits)
     $mergedBranches = git -C $MainPath branch --merged $MainBranch 2>$null
     if ($mergedBranches -match ('(^|\s)' + [regex]::Escape($name) + '\s*$')) {
         Write-Host "  ✓ Merged into $MainBranch" -ForegroundColor Green
-    } else {
+    } elseif (-not $hasUnpushed) {
         $remoteMain = "origin/$MainBranch"
         git -C $MainPath rev-parse --verify $remoteMain 2>$null | Out-Null
         $mainRef = if ($LASTEXITCODE -eq 0) { $remoteMain } else { $MainBranch }
         $mergeBase = git -C $MainPath merge-base $mainRef $name 2>$null
+        $uniqueCommits = if ($mergeBase) { git -C $MainPath log "$mergeBase..$name" --oneline 2>$null } else { $null }
         $squashDiff = if ($mergeBase) { git -C $MainPath merge-tree $mergeBase $mainRef $name 2>$null } else { 'not-checked' }
-        if ($mergeBase -and ($null -eq $squashDiff -or $squashDiff.Trim() -eq '')) {
+        if ($uniqueCommits -and $mergeBase -and ($null -eq $squashDiff -or $squashDiff.Trim() -eq '')) {
             Write-Host "  ✓ Squash-merged into $MainBranch" -ForegroundColor Green
         } else {
             Write-Host "  ✗ Not merged into $MainBranch" -ForegroundColor Red
             $allOk = $false
         }
+    } else {
+        Write-Host "  ✗ Not merged into $MainBranch" -ForegroundColor Red
+        $allOk = $false
     }
 
     Write-Host ''
@@ -400,16 +406,20 @@ function Invoke-CheckWorktree([string]$Name, [bool]$All) {
                 $tracking = '✓'
                 $unpushed = if (git -C $path log "$upstream..HEAD" --oneline) { '✗' } else { '✓' }
             }
+            $wtHasUnpushed = $unpushed -eq '✗' -or $tracking -eq '✗'
             $mergedBranches = git -C $worktrees[0].Path branch --merged $mainBranch 2>$null
             if ($mergedBranches -match ('(^|\s)' + [regex]::Escape($wt.Branch) + '\s*$')) {
-                $merged = '✓'
-            } else {
+                $merged = '✓ (merge)'
+            } elseif (-not $wtHasUnpushed) {
                 $remoteMain = "origin/$mainBranch"
                 git -C $worktrees[0].Path rev-parse --verify $remoteMain 2>$null | Out-Null
                 $mainRef = if ($LASTEXITCODE -eq 0) { $remoteMain } else { $mainBranch }
                 $mergeBase = git -C $worktrees[0].Path merge-base $mainRef $wt.Branch 2>$null
+                $uniqueCommits = if ($mergeBase) { git -C $worktrees[0].Path log "$mergeBase..$($wt.Branch)" --oneline 2>$null } else { $null }
                 $squashDiff = if ($mergeBase) { git -C $worktrees[0].Path merge-tree $mergeBase $mainRef $wt.Branch 2>$null } else { 'not-checked' }
-                $merged = if ($mergeBase -and ($null -eq $squashDiff -or $squashDiff.Trim() -eq '')) { '✓' } else { '✗' }
+                $merged = if ($uniqueCommits -and $mergeBase -and ($null -eq $squashDiff -or $squashDiff.Trim() -eq '')) { '✓ (squash)' } else { '✗' }
+            } else {
+                $merged = '✗'
             }
             $rows += [PSCustomObject]@{
                 Worktree     = $wt.Branch
@@ -424,17 +434,17 @@ function Invoke-CheckWorktree([string]$Name, [bool]$All) {
         $colWorktree    = [Math]::Max(8,  ($rows | ForEach-Object { $_.Worktree.Length }    | Measure-Object -Maximum).Maximum)
         $colIsClean     = [Math]::Max(9,  ($rows | ForEach-Object { $_.IsClean.Length }     | Measure-Object -Maximum).Maximum)
         $colHasUpstream = [Math]::Max(12, ($rows | ForEach-Object { $_.HasUpstream.Length } | Measure-Object -Maximum).Maximum)
-        $colUnpushed    = [Math]::Max(9,  ($rows | ForEach-Object { $_.Unpushed.Length }    | Measure-Object -Maximum).Maximum)
+        $colUnpushed    = [Math]::Max(7,  ($rows | ForEach-Object { $_.Unpushed.Length }    | Measure-Object -Maximum).Maximum)
         $colMerged      = [Math]::Max(7,  ($rows | ForEach-Object { $_.Merged.Length }      | Measure-Object -Maximum).Maximum)
 
         $fmt = "{0,-$colWorktree}  {1,-$colIsClean}  {2,-$colHasUpstream}  {3,-$colUnpushed}  {4,-$colMerged}"
-        $header = $fmt -f 'Worktree', 'Is clean?', 'Has upstream?', 'Unpushed?', 'Merged?'
+        $header = $fmt -f 'Worktree', 'Is clean?', 'Has upstream?', 'Pushed?', 'Merged?'
         $separator = ('-' * $header.Length)
 
         Write-Host $header
         Write-Host $separator
         foreach ($row in $rows) {
-            $rowReady = $row.IsClean -eq '✓' -and $row.HasUpstream -eq '✓' -and $row.Unpushed -eq '✓' -and $row.Merged -eq '✓'
+            $rowReady = $row.IsClean -eq '✓' -and $row.HasUpstream -eq '✓' -and $row.Unpushed -eq '✓' -and ($row.Merged -eq '✓ (merge)' -or $row.Merged -eq '✓ (squash)')
             $cells = @(
                 @{ Value = $row.Worktree;    Width = $colWorktree }
                 @{ Value = $row.IsClean;     Width = $colIsClean }
@@ -447,7 +457,7 @@ function Invoke-CheckWorktree([string]$Name, [bool]$All) {
                 $pad = $cell.Value.PadRight($cell.Width)
                 $color = if ($i -eq 0) {
                     if ($rowReady) { 'Green' } else { 'Gray' }
-                } elseif ($cell.Value -eq '✗') { 'Red' } elseif ($cell.Value -eq '✓') { 'Green' } else { 'Gray' }
+                } elseif ($cell.Value -eq '✗') { 'Red' } elseif ($cell.Value -like '✓*') { 'Green' } else { 'Gray' }
                 $suffix = if ($i -lt $cells.Count - 1) { '  ' } else { '' }
                 Write-Host ($pad + $suffix) -ForegroundColor $color -NoNewline
             }
