@@ -182,10 +182,12 @@ Describe 'Invoke-Switch' {
 }
 
 Describe 'Get-WorktreePath' {
-    Context 'no .wtconfig — uses ~/.worktrees/<repo>/<branch> default' {
+    Context 'no .wtconfig - uses ~/.worktrees/<repo>/<branch> default' {
         BeforeAll {
             $script:repo = New-TestRepo -RepoName 'my-repo'
             Set-Location $script:repo.MainPath
+            # Remove the .wtconfig written by New-TestRepo so we test the default behaviour
+            Remove-Item (Join-Path $script:repo.MainPath '.wtconfig') -ErrorAction SilentlyContinue
             $null = (. $script:ScriptPath help) 6>&1
         }
 

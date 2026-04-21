@@ -293,14 +293,6 @@ get_worktree_path() {
 	local branch="$1"
 	local main_path
 	main_path=$(git worktree list --porcelain | awk 'NR==1{print $2}')
-	local parent_path
-	parent_path=$(dirname "$main_path")
-	local grand_parent_path
-	grand_parent_path=$(dirname "$parent_path")
-	if [ -z "$grand_parent_path" ] || [ "$grand_parent_path" = "$parent_path" ]; then
-		echo "Error: the repository is at the filesystem root and has no parent directory for .worktrees." >&2
-		return 1
-	fi
 	local remote_url
 	remote_url=$(git remote get-url origin 2>/dev/null)
 	local repo_name
@@ -309,7 +301,36 @@ get_worktree_path() {
 	else
 		repo_name=$(basename "$main_path")
 	fi
-	echo "$grand_parent_path/.worktrees/$repo_name/$branch"
+
+	# Read base path from .wtconfig if present
+	local base_path=""
+	local config_file="$main_path/.wtconfig"
+	if [ -f "$config_file" ]; then
+		local in_worktrees_section=false
+		while IFS= read -r line; do
+			if [[ "$line" =~ ^\[worktrees\] ]]; then
+				in_worktrees_section=true
+			elif [[ "$line" =~ ^\[ ]]; then
+				in_worktrees_section=false
+			elif [[ "$in_worktrees_section" == true && "$line" =~ ^[[:space:]]*path[[:space:]]*=[[:space:]]*(.+)$ ]]; then
+				base_path="${BASH_REMATCH[1]}"
+				base_path="${base_path#"${base_path%%[![:space:]]*}"}"  # ltrim
+				base_path="${base_path%"${base_path##*[![:space:]]}"}"  # rtrim
+				break
+			fi
+		done < "$config_file"
+	fi
+
+	if [ -n "$base_path" ]; then
+		# Resolve relative paths against the main worktree directory
+		if [[ "$base_path" != /* ]]; then
+			base_path=$(cd "$main_path" && realpath "$base_path" 2>/dev/null || echo "$main_path/$base_path")
+		fi
+	else
+		base_path="$HOME/.worktrees"
+	fi
+
+	echo "$base_path/$repo_name/$branch"
 }
 
 add_worktree() {

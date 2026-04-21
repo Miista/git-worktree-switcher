@@ -109,18 +109,40 @@ function Invoke-Switch([string]$Name) {
 function Get-WorktreePath([string]$Branch) {
     $worktrees = Get-ParsedWorktrees
     $mainPath = $worktrees[0].Path
-    $grandParentPath = Split-Path (Split-Path $mainPath -Parent) -Parent
-    if (-not $grandParentPath) {
-        Write-Error "Cannot create worktree: the repository is at the filesystem root and has no parent directory for .worktrees."
-        return $null
-    }
     $remoteUrl = git remote get-url origin 2>$null
     $repoName = if ($remoteUrl) {
         ($remoteUrl -split '[/:\\]' | Where-Object { $_ -ne '' })[-1] -replace '\.git$', ''
     } else {
         Split-Path $mainPath -Leaf
     }
-    return Join-Path $grandParentPath ".worktrees\$repoName\$Branch"
+
+    # Read base path from .wtconfig if present
+    $basePath = $null
+    $configFile = Join-Path $mainPath '.wtconfig'
+    if (Test-Path $configFile) {
+        $inWorktreesSection = $false
+        foreach ($line in (Get-Content $configFile)) {
+            if ($line -match '^\[worktrees\]') {
+                $inWorktreesSection = $true
+            } elseif ($line -match '^\[') {
+                $inWorktreesSection = $false
+            } elseif ($inWorktreesSection -and $line -match '^\s*path\s*=\s*(.+)$') {
+                $basePath = $Matches[1].Trim()
+                break
+            }
+        }
+    }
+
+    if ($basePath) {
+        # Resolve relative paths against the main worktree directory
+        if (-not [System.IO.Path]::IsPathRooted($basePath)) {
+            $basePath = [System.IO.Path]::GetFullPath((Join-Path $mainPath $basePath))
+        }
+    } else {
+        $basePath = Join-Path $HOME '.worktrees'
+    }
+
+    return Join-Path $basePath "$repoName\$Branch"
 }
 
 function Invoke-AddWorktree([string]$Branch, [bool]$Force) {
