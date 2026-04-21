@@ -614,9 +614,9 @@ Describe 'Invoke-CheckWorktree --all' {
         It 'shows a table with column headers' {
             $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
             $output | Should -Match 'Worktree'
-            $output | Should -Match 'Uncommitted'
-            $output | Should -Match 'Tracking'
-            $output | Should -Match 'Unpushed'
+            $output | Should -Match 'Is clean\?'
+            $output | Should -Match 'Has upstream\?'
+            $output | Should -Match 'Unpushed\?'
         }
 
         It 'lists all non-main worktrees as table rows' {

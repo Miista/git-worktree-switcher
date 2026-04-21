@@ -374,27 +374,27 @@ function Invoke-CheckWorktree([string]$Name, [bool]$All) {
                 $unpushed = if (git -C $path log "$upstream..HEAD" --oneline) { '✗' } else { '✓' }
             }
             $rows += [PSCustomObject]@{
-                Worktree    = $wt.Branch
-                Uncommitted = $uncommitted
-                Tracking    = $tracking
-                Unpushed    = $unpushed
+                Worktree     = $wt.Branch
+                IsClean      = $uncommitted
+                HasUpstream  = $tracking
+                Unpushed     = $unpushed
             }
         }
 
         # Calculate column widths
         $colWorktree    = [Math]::Max(8,  ($rows | ForEach-Object { $_.Worktree.Length }    | Measure-Object -Maximum).Maximum)
-        $colUncommitted = [Math]::Max(11, ($rows | ForEach-Object { $_.Uncommitted.Length } | Measure-Object -Maximum).Maximum)
-        $colTracking    = [Math]::Max(8,  ($rows | ForEach-Object { $_.Tracking.Length }    | Measure-Object -Maximum).Maximum)
-        $colUnpushed    = [Math]::Max(8,  ($rows | ForEach-Object { $_.Unpushed.Length }    | Measure-Object -Maximum).Maximum)
+        $colIsClean     = [Math]::Max(9,  ($rows | ForEach-Object { $_.IsClean.Length }     | Measure-Object -Maximum).Maximum)
+        $colHasUpstream = [Math]::Max(12, ($rows | ForEach-Object { $_.HasUpstream.Length } | Measure-Object -Maximum).Maximum)
+        $colUnpushed    = [Math]::Max(9,  ($rows | ForEach-Object { $_.Unpushed.Length }    | Measure-Object -Maximum).Maximum)
 
-        $fmt = "{0,-$colWorktree}  {1,-$colUncommitted}  {2,-$colTracking}  {3,-$colUnpushed}"
-        $header = $fmt -f 'Worktree', 'Uncommitted', 'Tracking', 'Unpushed'
+        $fmt = "{0,-$colWorktree}  {1,-$colIsClean}  {2,-$colHasUpstream}  {3,-$colUnpushed}"
+        $header = $fmt -f 'Worktree', 'Is clean?', 'Has upstream?', 'Unpushed?'
         $separator = ('-' * $header.Length)
 
         Write-Host $header
         Write-Host $separator
         foreach ($row in $rows) {
-            $line = $fmt -f $row.Worktree, $row.Uncommitted, $row.Tracking, $row.Unpushed
+            $line = $fmt -f $row.Worktree, $row.IsClean, $row.HasUpstream, $row.Unpushed
             # Color the line red if any column has ✗, green otherwise
             if ($line -match '✗') {
                 Write-Host $line -ForegroundColor Red
