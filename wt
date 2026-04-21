@@ -252,6 +252,8 @@ done_worktree() {
 check_worktree_one() {
 	local path="$1"
 	local name="$2"
+	local main_branch="$3"
+	local main_path="$4"
 	local all_ok=true
 
 	# Check 1: uncommitted changes
@@ -284,6 +286,25 @@ check_worktree_one() {
 		fi
 	fi
 
+	# Check 4: merged into main
+	local merged_branches
+	merged_branches=$(git -C "$main_path" branch --merged "$main_branch" 2>/dev/null)
+	if echo "$merged_branches" | grep -qE "(^|[[:space:]])${name}[[:space:]]*$"; then
+		echo "  ✓ Merged into $main_branch"
+	else
+		local merge_base squash_diff
+		merge_base=$(git -C "$main_path" merge-base "$main_branch" "$name" 2>/dev/null)
+		if [ -n "$merge_base" ]; then
+			squash_diff=$(git -C "$main_path" merge-tree "$merge_base" "$main_branch" "$name" 2>/dev/null)
+		fi
+		if [ -n "$merge_base" ] && [ -z "$squash_diff" ]; then
+			echo "  ✓ Squash-merged into $main_branch"
+		else
+			echo "  ✗ Not merged into $main_branch"
+			all_ok=false
+		fi
+	fi
+
 	echo ""
 	if [[ "$all_ok" == true ]]; then
 		echo "  ✓ Ready for 'wt done $name'."
@@ -296,6 +317,13 @@ check_worktree_one() {
 check_worktree() {
 	local name="$1"
 	local all="$2"
+
+	local main_path main_branch
+	eval "$(git worktree list --porcelain | awk 'NR==1,/^$/{
+		if (/^worktree /) main_path = substr($0, 10)
+		if (/^branch /)  { main_branch = substr($0, 8); sub("^refs/heads/", "", main_branch) }
+		if (/^$/) exit
+	} END { print "main_path=" main_path "\nmain_branch=" main_branch }')"
 
 	if [[ "$all" == "--all" ]]; then
 		local found=false
@@ -316,7 +344,7 @@ check_worktree() {
 					elif [ -n "$wt_branch" ]; then
 						echo "Checking worktree '$wt_branch' at: $wt_path"
 						echo ""
-						check_worktree_one "$wt_path" "$wt_branch"
+						check_worktree_one "$wt_path" "$wt_branch" "$main_branch" "$main_path"
 						echo ""
 						found=true
 					fi
@@ -357,7 +385,7 @@ check_worktree() {
 
 	echo "Checking worktree '$name' at: $match_path"
 	echo ""
-	check_worktree_one "$match_path" "$name"
+	check_worktree_one "$match_path" "$name" "$main_branch" "$main_path"
 }
 
 get_worktree_path() {

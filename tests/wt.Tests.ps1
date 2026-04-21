@@ -581,6 +581,32 @@ Describe 'Invoke-CheckWorktree' {
         }
     }
 
+    Context 'branch squash-merged into main' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            git checkout -b squash-branch --quiet 2>$null
+            New-Item -ItemType File -Path (Join-Path $script:repo.MainPath 'squash.txt') -Force | Out-Null
+            git add squash.txt
+            git commit -m "squash commit" --quiet
+            git checkout master --quiet 2>$null
+            git merge --squash squash-branch --quiet 2>$null
+            git commit -m "Squash merge squash-branch" --quiet
+            $script:wtPath = Join-Path $script:repo.Root 'squash-branch'
+            git worktree add $script:wtPath squash-branch --quiet 2>$null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'shows squash-merged into main' {
+            $output = (Invoke-CheckWorktree 'squash-branch') 6>&1 | Out-String
+            $output | Should -Match 'Squash-merged into'
+        }
+    }
+
     Context 'not inside any worktree' {
         BeforeAll {
             $script:repo = New-TestRepo

@@ -378,8 +378,14 @@ function Invoke-CheckWorktreeOne($worktree, [string]$MainBranch, [string]$MainPa
     if ($mergedBranches -match ('(^|\s)' + [regex]::Escape($name) + '\s*$')) {
         Write-Host "  ✓ Merged into $MainBranch" -ForegroundColor Green
     } else {
-        Write-Host "  ✗ Not merged into $MainBranch" -ForegroundColor Red
-        $allOk = $false
+        $mergeBase = git -C $MainPath merge-base "origin/$MainBranch" $name 2>$null
+        $squashDiff = if ($mergeBase) { git -C $MainPath merge-tree $mergeBase "origin/$MainBranch" $name 2>$null } else { 'not-checked' }
+        if ($mergeBase -and ($null -eq $squashDiff -or $squashDiff.Trim() -eq '')) {
+            Write-Host "  ✓ Squash-merged into $MainBranch" -ForegroundColor Green
+        } else {
+            Write-Host "  ✗ Not merged into $MainBranch" -ForegroundColor Red
+            $allOk = $false
+        }
     }
 
     Write-Host ''
@@ -417,7 +423,13 @@ function Invoke-CheckWorktree([string]$Name, [bool]$All) {
                 $unpushed = if (git -C $path log "$upstream..HEAD" --oneline) { '✗' } else { '✓' }
             }
             $mergedBranches = git -C $worktrees[0].Path branch --merged $mainBranch 2>$null
-            $merged = if ($mergedBranches -match ('(^|\s)' + [regex]::Escape($wt.Branch) + '\s*$')) { '✓' } else { '✗' }
+            if ($mergedBranches -match ('(^|\s)' + [regex]::Escape($wt.Branch) + '\s*$')) {
+                $merged = '✓'
+            } else {
+                $mergeBase = git -C $worktrees[0].Path merge-base "origin/$mainBranch" $wt.Branch 2>$null
+                $squashDiff = if ($mergeBase) { git -C $worktrees[0].Path merge-tree $mergeBase "origin/$mainBranch" $wt.Branch 2>$null } else { 'not-checked' }
+                $merged = if ($mergeBase -and ($null -eq $squashDiff -or $squashDiff.Trim() -eq '')) { '✓' } else { '✗' }
+            }
             $rows += [PSCustomObject]@{
                 Worktree     = $wt.Branch
                 IsClean      = $uncommitted
@@ -441,6 +453,7 @@ function Invoke-CheckWorktree([string]$Name, [bool]$All) {
         Write-Host $header
         Write-Host $separator
         foreach ($row in $rows) {
+            $rowReady = $row.IsClean -eq '✓' -and $row.HasUpstream -eq '✓' -and $row.Unpushed -eq '✓' -and $row.Merged -eq '✓'
             $cells = @(
                 @{ Value = $row.Worktree;    Width = $colWorktree }
                 @{ Value = $row.IsClean;     Width = $colIsClean }
@@ -451,7 +464,9 @@ function Invoke-CheckWorktree([string]$Name, [bool]$All) {
             for ($i = 0; $i -lt $cells.Count; $i++) {
                 $cell = $cells[$i]
                 $pad = $cell.Value.PadRight($cell.Width)
-                $color = if ($cell.Value -eq '✗') { 'Red' } elseif ($cell.Value -eq '✓') { 'Green' } else { 'Gray' }
+                $color = if ($i -eq 0) {
+                    if ($rowReady) { 'Green' } else { 'Gray' }
+                } elseif ($cell.Value -eq '✗') { 'Red' } elseif ($cell.Value -eq '✓') { 'Green' } else { 'Gray' }
                 $suffix = if ($i -lt $cells.Count - 1) { '  ' } else { '' }
                 Write-Host ($pad + $suffix) -ForegroundColor $color -NoNewline
             }
