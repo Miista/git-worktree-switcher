@@ -293,33 +293,8 @@ function Invoke-DoneWorktree([string]$Name, [bool]$Yes) {
         }
     }
     if (-not $Yes) {
-        # check for uncommitted changes
-        $status = git -C $match.Path status --porcelain
-        if ($status) {
-            Write-Host "Worktree '$Name' has uncommitted changes:"
-            git -C $match.Path status --short
-            Write-Host ""
-            Write-Host "Commit or stash your changes first, then run 'wt done $Name' again."
-            return
-        }
-        # check for unpushed commits
-        $upstream = git -C $match.Path rev-parse --abbrev-ref "@{upstream}" 2>$null
-        if ($LASTEXITCODE -eq 0 -and $upstream) {
-            $unpushed = git -C $match.Path log "$upstream..HEAD" --oneline
-            if ($unpushed) {
-                Write-Host "Worktree '$Name' has unpushed commits:"
-                Write-Host $unpushed
-                Write-Host ""
-                Write-Host "Push your changes first with 'git push', then run 'wt done $Name' again."
-                return
-            }
-        } else {
-            # no upstream set
-            $branchName = git -C $match.Path rev-parse --abbrev-ref HEAD 2>$null
-            Write-Host "Branch '$branchName' has no upstream tracking branch."
-            Write-Host "Push your branch first with 'git push -u origin $branchName', then run 'wt done $Name' again."
-            return
-        }
+        $allOk = Invoke-CheckWorktreeOne $match $worktrees[0].Branch $worktrees[0].Path
+        if (-not $allOk) { return }
     }
     # all clean — remove worktree and delete branch
     Write-Host "Removing worktree at: $($match.Path)"
@@ -378,8 +353,11 @@ function Invoke-CheckWorktreeOne($worktree, [string]$MainBranch, [string]$MainPa
     if ($mergedBranches -match ('(^|\s)' + [regex]::Escape($name) + '\s*$')) {
         Write-Host "  ✓ Merged into $MainBranch" -ForegroundColor Green
     } else {
-        $mergeBase = git -C $MainPath merge-base "origin/$MainBranch" $name 2>$null
-        $squashDiff = if ($mergeBase) { git -C $MainPath merge-tree $mergeBase "origin/$MainBranch" $name 2>$null } else { 'not-checked' }
+        $remoteMain = "origin/$MainBranch"
+        git -C $MainPath rev-parse --verify $remoteMain 2>$null | Out-Null
+        $mainRef = if ($LASTEXITCODE -eq 0) { $remoteMain } else { $MainBranch }
+        $mergeBase = git -C $MainPath merge-base $mainRef $name 2>$null
+        $squashDiff = if ($mergeBase) { git -C $MainPath merge-tree $mergeBase $mainRef $name 2>$null } else { 'not-checked' }
         if ($mergeBase -and ($null -eq $squashDiff -or $squashDiff.Trim() -eq '')) {
             Write-Host "  ✓ Squash-merged into $MainBranch" -ForegroundColor Green
         } else {
@@ -426,8 +404,11 @@ function Invoke-CheckWorktree([string]$Name, [bool]$All) {
             if ($mergedBranches -match ('(^|\s)' + [regex]::Escape($wt.Branch) + '\s*$')) {
                 $merged = '✓'
             } else {
-                $mergeBase = git -C $worktrees[0].Path merge-base "origin/$mainBranch" $wt.Branch 2>$null
-                $squashDiff = if ($mergeBase) { git -C $worktrees[0].Path merge-tree $mergeBase "origin/$mainBranch" $wt.Branch 2>$null } else { 'not-checked' }
+                $remoteMain = "origin/$mainBranch"
+                git -C $worktrees[0].Path rev-parse --verify $remoteMain 2>$null | Out-Null
+                $mainRef = if ($LASTEXITCODE -eq 0) { $remoteMain } else { $mainBranch }
+                $mergeBase = git -C $worktrees[0].Path merge-base $mainRef $wt.Branch 2>$null
+                $squashDiff = if ($mergeBase) { git -C $worktrees[0].Path merge-tree $mergeBase $mainRef $wt.Branch 2>$null } else { 'not-checked' }
                 $merged = if ($mergeBase -and ($null -eq $squashDiff -or $squashDiff.Trim() -eq '')) { '✓' } else { '✗' }
             }
             $rows += [PSCustomObject]@{
