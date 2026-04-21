@@ -308,7 +308,7 @@ function Invoke-DoneWorktree([string]$Name, [bool]$Yes) {
     }
 }
 
-function Invoke-CheckWorktreeOne($worktree) {
+function Invoke-CheckWorktreeOne($worktree, [string]$MainBranch, [string]$MainPath) {
     $name = $worktree.Branch
     $path = $worktree.Path
     $allOk = $true
@@ -338,6 +338,15 @@ function Invoke-CheckWorktreeOne($worktree) {
         } else {
             Write-Host "  ✓ No unpushed commits" -ForegroundColor Green
         }
+    }
+
+    # Check 4: merged into main
+    $mergedBranches = git -C $MainPath branch --merged $MainBranch 2>$null
+    if ($mergedBranches -match ('(^|\s)' + [regex]::Escape($name) + '\s*$')) {
+        Write-Host "  ✓ Merged into $MainBranch" -ForegroundColor Green
+    } else {
+        Write-Host "  ✗ Not merged into $MainBranch" -ForegroundColor Red
+        $allOk = $false
     }
 
     Write-Host ''
@@ -430,7 +439,7 @@ function Invoke-CheckWorktree([string]$Name, [bool]$All) {
 
     Write-Host "Checking worktree '$Name' at: $($match.Path)"
     Write-Host ''
-    $allOk = Invoke-CheckWorktreeOne $match
+    $allOk = Invoke-CheckWorktreeOne $match $worktrees[0].Branch $worktrees[0].Path
     if (-not $allOk) { return }
 }
 

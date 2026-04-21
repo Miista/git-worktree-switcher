@@ -440,11 +440,12 @@ Describe 'Invoke-CheckWorktree' {
             Remove-TestRepo $script:repo.Root
         }
 
-        It 'shows all checks passed' {
+        It 'shows clean but not yet merged' {
             $output = (Invoke-CheckWorktree 'clean-branch') 6>&1 | Out-String
-            $output | Should -Match 'Ready for'
             $output | Should -Match 'No uncommitted changes'
             $output | Should -Match 'No unpushed commits'
+            $output | Should -Match 'Not merged into'
+            $output | Should -Match 'Some checks failed'
         }
     }
 
@@ -550,7 +551,33 @@ Describe 'Invoke-CheckWorktree' {
             Set-Location $script:wtPath
             $output = (Invoke-CheckWorktree '') 6>&1 | Out-String
             $output | Should -Match 'current-check'
+            $output | Should -Match 'Merged into'
             $output | Should -Match 'Ready for'
+        }
+    }
+
+    Context 'branch merged into main' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+            git checkout -b merged-branch --quiet 2>$null
+            New-Item -ItemType File -Path (Join-Path $script:repo.MainPath 'merged.txt') -Force | Out-Null
+            git add merged.txt
+            git commit -m "merged commit" --quiet
+            git checkout master --quiet 2>$null
+            git merge merged-branch --quiet 2>$null
+            $script:wtPath = Join-Path $script:repo.Root 'merged-branch'
+            git worktree add $script:wtPath merged-branch --quiet 2>$null
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'shows merged into main warning' {
+            $output = (Invoke-CheckWorktree 'merged-branch') 6>&1 | Out-String
+            $output | Should -Match 'Merged into'
         }
     }
 
