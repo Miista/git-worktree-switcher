@@ -20,7 +20,7 @@ param(
 )
 
 $isForce = $force.IsPresent -or $ForceArg -eq '--force' -or $ForceArg -eq '-force'
-$isYes = $yes.IsPresent -or $ForceArg -eq '--yes' -or $ForceArg -eq '-yes'
+$isYes = $yes.IsPresent -or $ForceArg -eq '--yes' -or $ForceArg -eq '-yes' -or $Arg -eq '--yes' -or $Arg -eq '-yes'
 $isAll = $Arg -eq '--all' -or $Arg -eq '-all'
 
 $VERSION = '0.1.3'
@@ -571,7 +571,7 @@ switch ($Command) {
     'add'     { Invoke-AddWorktree $Arg $isForce }
     'create'  { Invoke-CreateWorktree $Arg $isForce }
     'rm'      { Invoke-RmWorktree $Arg $isForce }
-    'done'    { Invoke-DoneWorktree $Arg $isYes }
+    'done'    { $doneArg = if ($Arg -eq '--yes' -or $Arg -eq '-yes') { '' } else { $Arg }; Invoke-DoneWorktree $doneArg $isYes }
     'check'   { Invoke-CheckWorktree $Arg $isAll }
     default   { Invoke-Switch $Command }
 }
