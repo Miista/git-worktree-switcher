@@ -101,10 +101,43 @@ function Invoke-GotoMain {
 
 function Invoke-Switch([string]$Name) {
     $worktrees = Get-ParsedWorktrees
-    $match = $worktrees | Where-Object { $_.Path -match [regex]::Escape($Name) -or $_.Branch -match [regex]::Escape($Name) } | Select-Object -First 1
-    if ($match) {
-        Write-Host "Changing to worktree at: $($match.Path)"
-        Set-Location $match.Path
+    $pattern = [regex]::Escape($Name)
+    $matchedWorktrees = @($worktrees | Where-Object { $_.Path -match $pattern -or $_.Branch -match $pattern })
+    if ($matchedWorktrees.Count -eq 0) {
+        Write-Host "No worktree matching '$Name' found."
+        return
+    }
+    if ($matchedWorktrees.Count -eq 1) {
+        Write-Host "Changing to worktree at: $($matchedWorktrees[0].Path)"
+        Set-Location $matchedWorktrees[0].Path
+        return
+    }
+
+    # Multiple matches — use fzf if available, otherwise numbered prompt
+    $fzfAvailable = $null -ne (Get-Command fzf -ErrorAction SilentlyContinue)
+    if ($fzfAvailable) {
+        $lines = $matchedWorktrees | ForEach-Object { "$($_.Branch)  $($_.Path)" }
+        $selected = $lines | fzf --height=10% --no-multi --exit-0
+        if ($selected) {
+            $path = ($selected -split '\s{2,}')[1]
+            Write-Host "Changing to worktree at: $path"
+            Set-Location $path
+        }
+    }
+    else {
+        Write-Host "Multiple worktrees match '$Name':"
+        for ($i = 0; $i -lt $matchedWorktrees.Count; $i++) {
+            Write-Host "  $($i + 1)) $($matchedWorktrees[$i].Branch)  $($matchedWorktrees[$i].Path)"
+        }
+        $choice = Read-Host "Enter number"
+        $index = [int]$choice - 1
+        if ($index -ge 0 -and $index -lt $matchedWorktrees.Count) {
+            Write-Host "Changing to worktree at: $($matchedWorktrees[$index].Path)"
+            Set-Location $matchedWorktrees[$index].Path
+        }
+        else {
+            Write-Host "Invalid selection."
+        }
     }
 }
 

@@ -35,15 +35,45 @@ switch_worktree() {
 		echo "Usage: wt <worktree>"
 		return 1
 	fi
-	local directory
-	directory=$(git worktree list --porcelain | grep -E 'worktree ' | awk '/'"$(echo "$name" | sed 's/\//\\\//g')"'/ {print; exit}' | cut -d ' ' -f2-)
-	if [ -z "$directory" ]; then
+	local escaped
+	escaped=$(echo "$name" | sed 's/\//\\\//g')
+	local matches
+	mapfile -t matches < <(git worktree list --porcelain | awk '
+		/^worktree / { path=substr($0, index($0,$2)) }
+		/^branch /   { branch=substr($0, index($0,$2)); sub("^refs/heads/", "", branch) }
+		/^$/         { if (path != "") { print path " [" branch "]"; path=""; branch="" } }
+		END          { if (path != "") print path " [" branch "]" }
+	' | grep "$escaped")
+	if [ "${#matches[@]}" -eq 0 ]; then
 		echo "No worktree matching '$name' found."
 		return 1
 	fi
-	echo "Changing to worktree at: $directory"
-	cd "$directory"
-	exec $SHELL
+	local directory
+	if [ "${#matches[@]}" -eq 1 ]; then
+		directory=$(echo "${matches[0]}" | awk '{print $1}')
+	elif command -v fzf &> /dev/null; then
+		directory=$(printf '%s\n' "${matches[@]}" | fzf --height=10% --no-multi --exit-0 | awk '{print $1}')
+	else
+		echo "Multiple worktrees match '$name':"
+		local i
+		for i in "${!matches[@]}"; do
+			echo "  $((i+1))) ${matches[$i]}"
+		done
+		printf "Enter number: "
+		local choice
+		read -r choice
+		if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#matches[@]}" ]; then
+			directory=$(echo "${matches[$((choice-1))]}" | awk '{print $1}')
+		else
+			echo "Invalid selection."
+			return 1
+		fi
+	fi
+	if [ -n "$directory" ]; then
+		echo "Changing to worktree at: $directory"
+		cd "$directory"
+		exec $SHELL
+	fi
 }
 
 # show worktree list
