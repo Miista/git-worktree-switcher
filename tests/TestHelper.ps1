@@ -28,7 +28,11 @@ function New-TestRepo {
         git config user.email "test@test.com"
         git config user.name "Test"
         New-Item -ItemType File -Path (Join-Path $mainPath '.gitkeep') -Force | Out-Null
-        git add .gitkeep
+        # Write .wtconfig pointing worktree path to a subdir of the test root,
+        # so tests never write into $HOME/.worktrees
+        $wtConfigPath = Join-Path $mainPath '.wtconfig'
+        Set-Content $wtConfigPath "[worktrees]`n`tpath = $($root.Replace('\', '/'))"
+        git add .gitkeep .wtconfig
         git commit -m "initial commit" --quiet
         git push --quiet 2>$null
     }
@@ -99,12 +103,6 @@ function Remove-TestRepo {
         finally {
             Pop-Location
         }
-    }
-
-    # Remove .worktrees sibling directory if it was created by tests
-    $worktreesDir = Join-Path (Split-Path $Root -Parent) '.worktrees'
-    if (Test-Path $worktreesDir) {
-        Remove-Item -Recurse -Force $worktreesDir -ErrorAction SilentlyContinue
     }
 
     # Force remove the whole tree

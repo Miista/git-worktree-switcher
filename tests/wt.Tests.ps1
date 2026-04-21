@@ -182,32 +182,69 @@ Describe 'Invoke-Switch' {
 }
 
 Describe 'Get-WorktreePath' {
-    BeforeAll {
-        $script:repo = New-TestRepo -RepoName 'my-repo'
-        Set-Location $script:repo.MainPath
-        $null = (. $script:ScriptPath help) 6>&1
+    Context 'no .wtconfig — uses ~/.worktrees/<repo>/<branch> default' {
+        BeforeAll {
+            $script:repo = New-TestRepo -RepoName 'my-repo'
+            Set-Location $script:repo.MainPath
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'falls back to ~/.worktrees/<repo>/<branch>' {
+            $result = Get-WorktreePath 'feature-x'
+            $expected = Join-Path $HOME ".worktrees\my-repo\feature-x"
+            $result | Should -Be $expected
+        }
+
+        It 'uses the repo name from the remote URL' {
+            $result = Get-WorktreePath 'some-branch'
+            $result | Should -Match 'my-repo'
+        }
     }
 
-    AfterAll {
-        Remove-TestRepo $script:repo.Root
+    Context '.wtconfig with absolute path' {
+        BeforeAll {
+            $script:repo = New-TestRepo -RepoName 'my-repo'
+            Set-Location $script:repo.MainPath
+            $script:customRoot = Join-Path $env:TEMP "wt-custom-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+            $configPath = Join-Path $script:repo.MainPath '.wtconfig'
+            Set-Content $configPath "[worktrees]`n`tpath = $($script:customRoot.Replace('\', '/'))"
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-Item -Recurse -Force $script:customRoot -ErrorAction SilentlyContinue
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'uses the absolute path from .wtconfig' {
+            $result = Get-WorktreePath 'feature-x'
+            $expected = Join-Path $script:customRoot 'my-repo\feature-x'
+            $result | Should -Be $expected
+        }
     }
 
-    It 'returns ../.worktrees/<repo>/<branch> relative to the main worktree' {
-        $result = Get-WorktreePath 'feature-x'
-        $expected = Join-Path (Split-Path $script:repo.Root -Parent) ".worktrees\my-repo\feature-x"
-        $result | Should -Be $expected
-    }
+    Context '.wtconfig with relative path' {
+        BeforeAll {
+            $script:repo = New-TestRepo -RepoName 'my-repo'
+            Set-Location $script:repo.MainPath
+            $configPath = Join-Path $script:repo.MainPath '.wtconfig'
+            Set-Content $configPath "[worktrees]`n`tpath = ../.wt"
+            $null = (. $script:ScriptPath help) 6>&1
+        }
 
-    It 'uses the repo name from the remote URL' {
-        $result = Get-WorktreePath 'some-branch'
-        $result | Should -Match 'my-repo'
-    }
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
 
-    It 'errors when the repo has no parent directory' {
-        # We cannot easily simulate a root-level repo in tests, so we verify the
-        # function exists and returns a non-empty path for a normal repo.
-        $result = Get-WorktreePath 'branch'
-        $result | Should -Not -BeNullOrEmpty
+        It 'resolves relative path from the main worktree directory' {
+            $result = Get-WorktreePath 'feature-x'
+            $expected = Join-Path $script:repo.Root ".wt\my-repo\feature-x"
+            $result | Should -Be $expected
+        }
     }
 }
 
@@ -242,7 +279,7 @@ Describe 'Invoke-AddWorktree' {
 
         It 'creates a new branch and worktree' {
             $null = (Invoke-AddWorktree 'brand-new' $false) 6>&1
-            $wtPath = Join-Path (Split-Path $script:repo.Root -Parent) ".worktrees\my-repo\brand-new"
+            $wtPath = Join-Path $script:repo.Root "my-repo\brand-new"
             Test-Path $wtPath | Should -BeTrue
         }
     }
@@ -262,7 +299,7 @@ Describe 'Invoke-AddWorktree' {
 
         It 'creates a worktree for the local branch' {
             $null = (Invoke-AddWorktree 'local-only' $false) 6>&1
-            $wtPath = Join-Path (Split-Path $script:repo.Root -Parent) ".worktrees\my-repo\local-only"
+            $wtPath = Join-Path $script:repo.Root "my-repo\local-only"
             Test-Path $wtPath | Should -BeTrue
         }
     }
@@ -288,7 +325,7 @@ Describe 'Invoke-AddWorktree' {
 
         It 'creates a tracking worktree from remote' {
             $null = (Invoke-AddWorktree 'remote-only' $false) 6>&1
-            $wtPath = Join-Path (Split-Path $script:repo.Root -Parent) ".worktrees\my-repo\remote-only"
+            $wtPath = Join-Path $script:repo.Root "my-repo\remote-only"
             Test-Path $wtPath | Should -BeTrue
             # Verify it tracks the remote
             $upstream = git -C $wtPath rev-parse --abbrev-ref '@{upstream}' 2>$null
@@ -315,7 +352,7 @@ Describe 'Invoke-AddWorktree' {
 
         It 'creates the worktree' {
             $null = (Invoke-AddWorktree 'tracked-branch' $false) 6>&1
-            $wtPath = Join-Path (Split-Path $script:repo.Root -Parent) ".worktrees\my-repo\tracked-branch"
+            $wtPath = Join-Path $script:repo.Root "my-repo\tracked-branch"
             Test-Path $wtPath | Should -BeTrue
         }
     }
@@ -374,7 +411,7 @@ Describe 'Invoke-CreateWorktree' {
 
     It 'creates a worktree and switches to it' {
         $null = (Invoke-CreateWorktree 'new-feature' $false) 6>&1
-        $wtPath = Join-Path (Split-Path $script:repo.Root -Parent) ".worktrees\$($script:repo.RepoName)\new-feature"
+        $wtPath = Join-Path $script:repo.Root "$($script:repo.RepoName)\new-feature"
         Test-Path $wtPath | Should -BeTrue
         (Get-Location).Path | Should -BeLike '*new-feature*'
     }
