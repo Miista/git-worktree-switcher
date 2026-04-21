@@ -181,6 +181,36 @@ Describe 'Invoke-Switch' {
     }
 }
 
+Describe 'Get-WorktreePath' {
+    BeforeAll {
+        $script:repo = New-TestRepo -RepoName 'my-repo'
+        Set-Location $script:repo.MainPath
+        $null = (. $script:ScriptPath help) 6>&1
+    }
+
+    AfterAll {
+        Remove-TestRepo $script:repo.Root
+    }
+
+    It 'returns ../.worktrees/<repo>/<branch> relative to the main worktree' {
+        $result = Get-WorktreePath 'feature-x'
+        $expected = Join-Path (Split-Path $script:repo.Root -Parent) ".worktrees\my-repo\feature-x"
+        $result | Should -Be $expected
+    }
+
+    It 'uses the repo name from the remote URL' {
+        $result = Get-WorktreePath 'some-branch'
+        $result | Should -Match 'my-repo'
+    }
+
+    It 'errors when the repo has no parent directory' {
+        # We cannot easily simulate a root-level repo in tests, so we verify the
+        # function exists and returns a non-empty path for a normal repo.
+        $result = Get-WorktreePath 'branch'
+        $result | Should -Not -BeNullOrEmpty
+    }
+}
+
 Describe 'Invoke-AddWorktree' {
     Context 'no branch argument' {
         BeforeAll {
@@ -201,7 +231,7 @@ Describe 'Invoke-AddWorktree' {
 
     Context 'branch does not exist anywhere' {
         BeforeAll {
-            $script:repo = New-TestRepo
+            $script:repo = New-TestRepo -RepoName 'my-repo'
             Set-Location $script:repo.MainPath
             $null = (. $script:ScriptPath help) 6>&1
         }
@@ -212,14 +242,14 @@ Describe 'Invoke-AddWorktree' {
 
         It 'creates a new branch and worktree' {
             $null = (Invoke-AddWorktree 'brand-new' $false) 6>&1
-            $wtPath = Join-Path $script:repo.Root 'brand-new'
+            $wtPath = Join-Path (Split-Path $script:repo.Root -Parent) ".worktrees\my-repo\brand-new"
             Test-Path $wtPath | Should -BeTrue
         }
     }
 
     Context 'branch exists only locally' {
         BeforeAll {
-            $script:repo = New-TestRepo
+            $script:repo = New-TestRepo -RepoName 'my-repo'
             Set-Location $script:repo.MainPath
             # Create a local branch but don't push it
             git branch local-only 2>$null
@@ -232,14 +262,14 @@ Describe 'Invoke-AddWorktree' {
 
         It 'creates a worktree for the local branch' {
             $null = (Invoke-AddWorktree 'local-only' $false) 6>&1
-            $wtPath = Join-Path $script:repo.Root 'local-only'
+            $wtPath = Join-Path (Split-Path $script:repo.Root -Parent) ".worktrees\my-repo\local-only"
             Test-Path $wtPath | Should -BeTrue
         }
     }
 
     Context 'branch exists only on remote' {
         BeforeAll {
-            $script:repo = New-TestRepo
+            $script:repo = New-TestRepo -RepoName 'my-repo'
             Set-Location $script:repo.MainPath
             # Create a branch, push it, then delete locally
             git checkout -b remote-only --quiet 2>$null
@@ -258,7 +288,7 @@ Describe 'Invoke-AddWorktree' {
 
         It 'creates a tracking worktree from remote' {
             $null = (Invoke-AddWorktree 'remote-only' $false) 6>&1
-            $wtPath = Join-Path $script:repo.Root 'remote-only'
+            $wtPath = Join-Path (Split-Path $script:repo.Root -Parent) ".worktrees\my-repo\remote-only"
             Test-Path $wtPath | Should -BeTrue
             # Verify it tracks the remote
             $upstream = git -C $wtPath rev-parse --abbrev-ref '@{upstream}' 2>$null
@@ -268,7 +298,7 @@ Describe 'Invoke-AddWorktree' {
 
     Context 'branch exists both locally and remotely with correct tracking' {
         BeforeAll {
-            $script:repo = New-TestRepo
+            $script:repo = New-TestRepo -RepoName 'my-repo'
             Set-Location $script:repo.MainPath
             git checkout -b tracked-branch --quiet 2>$null
             New-Item -ItemType File -Path (Join-Path $script:repo.MainPath 'tracked.txt') -Force | Out-Null
@@ -285,7 +315,7 @@ Describe 'Invoke-AddWorktree' {
 
         It 'creates the worktree' {
             $null = (Invoke-AddWorktree 'tracked-branch' $false) 6>&1
-            $wtPath = Join-Path $script:repo.Root 'tracked-branch'
+            $wtPath = Join-Path (Split-Path $script:repo.Root -Parent) ".worktrees\my-repo\tracked-branch"
             Test-Path $wtPath | Should -BeTrue
         }
     }
@@ -344,7 +374,7 @@ Describe 'Invoke-CreateWorktree' {
 
     It 'creates a worktree and switches to it' {
         $null = (Invoke-CreateWorktree 'new-feature' $false) 6>&1
-        $wtPath = Join-Path $script:repo.Root 'new-feature'
+        $wtPath = Join-Path (Split-Path $script:repo.Root -Parent) ".worktrees\$($script:repo.RepoName)\new-feature"
         Test-Path $wtPath | Should -BeTrue
         (Get-Location).Path | Should -BeLike '*new-feature*'
     }

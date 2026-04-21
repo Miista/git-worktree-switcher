@@ -5,10 +5,13 @@ function New-TestRepo {
     <#
     .SYNOPSIS
     Creates a temporary bare repo + cloned main worktree with one initial commit.
-    Returns @{ Root; MainPath; BarePath }.
+    Returns @{ Root; MainPath; BarePath; RepoName }.
     #>
+    param(
+        [string]$RepoName = 'test-repo'
+    )
     $root = Join-Path $env:TEMP "wt-tests-$([guid]::NewGuid().ToString('N').Substring(0,8))"
-    $barePath = Join-Path $root 'bare.git'
+    $barePath = Join-Path $root "$RepoName.git"
     $mainPath = Join-Path $root 'main'
 
     New-Item -ItemType Directory -Path $root -Force | Out-Null
@@ -34,9 +37,10 @@ function New-TestRepo {
     }
 
     return @{
-        Root     = $root
-        MainPath = $mainPath
-        BarePath = $barePath
+        Root      = $root
+        MainPath  = $mainPath
+        BarePath  = $barePath
+        RepoName  = $RepoName
     }
 }
 
@@ -95,6 +99,12 @@ function Remove-TestRepo {
         finally {
             Pop-Location
         }
+    }
+
+    # Remove .worktrees sibling directory if it was created by tests
+    $worktreesDir = Join-Path (Split-Path $Root -Parent) '.worktrees'
+    if (Test-Path $worktreesDir) {
+        Remove-Item -Recurse -Force $worktreesDir -ErrorAction SilentlyContinue
     }
 
     # Force remove the whole tree
