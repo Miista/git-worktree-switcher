@@ -106,17 +106,33 @@ function Invoke-Switch([string]$Name) {
     }
 }
 
+function Get-WorktreePath([string]$Branch) {
+    $worktrees = Get-ParsedWorktrees
+    $mainPath = $worktrees[0].Path
+    $grandParentPath = Split-Path (Split-Path $mainPath -Parent) -Parent
+    if (-not $grandParentPath) {
+        Write-Error "Cannot create worktree: the repository is at the filesystem root and has no parent directory for .worktrees."
+        return $null
+    }
+    $remoteUrl = git remote get-url origin 2>$null
+    $repoName = if ($remoteUrl) {
+        ($remoteUrl -split '[/:\\]' | Where-Object { $_ -ne '' })[-1] -replace '\.git$', ''
+    } else {
+        Split-Path $mainPath -Leaf
+    }
+    return Join-Path $grandParentPath ".worktrees\$repoName\$Branch"
+}
+
 function Invoke-AddWorktree([string]$Branch, [bool]$Force) {
     if (-not $Branch) {
         Write-Host 'Usage: wt add <branch-name> [--force]'
         return
     }
-    $worktrees = Get-ParsedWorktrees
-    $mainPath = $worktrees[0].Path
-    $parentPath = Split-Path $mainPath -Parent
-    $worktreePath = Join-Path $parentPath $Branch
+    $worktreePath = Get-WorktreePath $Branch
+    if (-not $worktreePath) { return }
 
     Write-Host "Adding worktree '$Branch' at: $worktreePath"
+    New-Item -ItemType Directory -Path (Split-Path $worktreePath -Parent) -Force | Out-Null
     $forceArg = if ($Force) { @('--force') } else { @() }
     git rev-parse --verify $Branch 2>$null | Out-Null
     $branchExists = $LASTEXITCODE -eq 0

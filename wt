@@ -289,6 +289,29 @@ check_worktree() {
 	fi
 }
 
+get_worktree_path() {
+	local branch="$1"
+	local main_path
+	main_path=$(git worktree list --porcelain | awk 'NR==1{print $2}')
+	local parent_path
+	parent_path=$(dirname "$main_path")
+	local grand_parent_path
+	grand_parent_path=$(dirname "$parent_path")
+	if [ -z "$grand_parent_path" ] || [ "$grand_parent_path" = "$parent_path" ]; then
+		echo "Error: the repository is at the filesystem root and has no parent directory for .worktrees." >&2
+		return 1
+	fi
+	local remote_url
+	remote_url=$(git remote get-url origin 2>/dev/null)
+	local repo_name
+	if [ -n "$remote_url" ]; then
+		repo_name=$(basename "$remote_url" .git)
+	else
+		repo_name=$(basename "$main_path")
+	fi
+	echo "$grand_parent_path/.worktrees/$repo_name/$branch"
+}
+
 add_worktree() {
 	local branch="$1"
 	local force="$2"
@@ -296,12 +319,10 @@ add_worktree() {
 		echo "Usage: wt add <branch-name> [--force]"
 		return 1
 	fi
-	local main_path
-	main_path=$(git worktree list --porcelain | awk 'NR==1{print $2}')
-	local parent_path
-	parent_path=$(dirname "$main_path")
-	local worktree_path="$parent_path/$branch"
+	local worktree_path
+	worktree_path=$(get_worktree_path "$branch") || return 1
 	echo "Adding worktree '$branch' at: $worktree_path"
+	mkdir -p "$(dirname "$worktree_path")"
 	local force_flag=""
 	[ "$force" == "--force" ] && force_flag="--force"
 	local branch_exists=false
