@@ -67,6 +67,63 @@ help_message() {
 	echo -e "\twt rm <worktree> [--force]: remove the worktree matching <worktree>."
 	echo -e "\twt done [worktree]: safely clean up a worktree after all changes are pushed."
 	echo -e "\twt check [worktree]: show the status of safety checks for a worktree."
+	echo -e "\twt prune: remove orphaned worktree directories left by a failed rm."
+}
+
+prune_worktrees() {
+	# Step 1: prune stale git metadata (worktrees whose directories no longer exist)
+	git worktree prune
+
+	# Step 2: find orphaned sibling directories — directories that have a .git file
+	# pointing to this repo but are not registered as worktrees
+	local main_path
+	main_path=$(git worktree list --porcelain | awk 'NR==1{print $2}')
+	local parent_path
+	parent_path=$(dirname "$main_path")
+	local main_git_dir="$main_path/.git"
+
+	local found=false
+	while IFS= read -r dir; do
+		# Skip if this directory is a registered worktree
+		if git worktree list --porcelain | awk '/^worktree / {print substr($0,10)}' | grep -qxF "$dir"; then
+			continue
+		fi
+
+		local git_file="$dir/.git"
+		if [ ! -f "$git_file" ]; then
+			continue
+		fi
+
+		# Confirm the .git file references this repo's git dir
+		local git_file_content
+		git_file_content=$(cat "$git_file" 2>/dev/null)
+		if ! echo "$git_file_content" | grep -q 'gitdir:'; then
+			continue
+		fi
+
+		local git_dir
+		git_dir=$(echo "$git_file_content" | sed 's/^gitdir:[[:space:]]*//' | tr -d '\r\n')
+		# Resolve relative path
+		if [[ "$git_dir" != /* ]]; then
+			git_dir=$(cd "$dir" && realpath "$git_dir" 2>/dev/null || echo "")
+		fi
+		if [ -z "$git_dir" ]; then
+			continue
+		fi
+
+		# The orphan's gitdir should be inside this repo's .git/worktrees/
+		if [[ "$git_dir" != "$main_git_dir/"* ]]; then
+			continue
+		fi
+
+		echo "Removing orphaned worktree directory: $dir"
+		rm -rf "$dir"
+		found=true
+	done < <(find "$parent_path" -mindepth 1 -maxdepth 1 -type d)
+
+	if [[ "$found" == false ]]; then
+		echo "Nothing to clean up."
+	fi
 }
 
 rm_worktree() {
@@ -454,6 +511,9 @@ done)
 	;;
 check)
 	check_worktree "${args[1]}"
+	;;
+prune)
+	prune_worktrees
 	;;
 *)
 	if [[ "$is_interactive" == true ]]; then

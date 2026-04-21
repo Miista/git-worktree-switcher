@@ -42,6 +42,7 @@ function Show-Help {
     Write-Host '  wt rm <worktree> [--force]     remove the worktree matching <worktree>.'
     Write-Host '  wt done [worktree]             safely clean up a worktree after all changes are pushed.'
     Write-Host '  wt check [worktree]            show the status of safety checks for a worktree.'
+    Write-Host '  wt prune                       remove orphaned worktree directories left by a failed rm.'
 }
 
 function Get-WorktreeList {
@@ -326,6 +327,49 @@ function Invoke-CheckWorktree([string]$Name) {
     }
 }
 
+function Invoke-PruneWorktrees {
+    # Step 1: prune stale git metadata (worktrees whose directories no longer exist)
+    git worktree prune
+
+    # Step 2: find orphaned sibling directories — directories that have a .git file
+    # pointing to this repo but are not registered as worktrees
+    $worktrees = Get-ParsedWorktrees
+    $mainPath = $worktrees[0].Path
+    $parentPath = Split-Path $mainPath -Parent
+    $registeredPaths = $worktrees | ForEach-Object { $_.Path.Replace('\', '/').TrimEnd('/') }
+
+    $found = $false
+    Get-ChildItem -Path $parentPath -Directory | ForEach-Object {
+        $dir = $_.FullName
+        $normalizedDir = $dir.Replace('\', '/').TrimEnd('/')
+        if ($registeredPaths -contains $normalizedDir) { return }
+
+        $gitFile = Join-Path $dir '.git'
+        if (-not (Test-Path $gitFile -PathType Leaf)) { return }
+
+        # Confirm the .git file references this repo's git dir
+        $gitFileContent = Get-Content $gitFile -Raw -ErrorAction SilentlyContinue
+        if ($gitFileContent -notmatch 'gitdir:') { return }
+
+        $gitDir = $gitFileContent -replace '^gitdir:\s*', '' -replace '[\r\n]', ''
+        # Resolve relative path
+        if (-not [System.IO.Path]::IsPathRooted($gitDir)) {
+            $gitDir = [System.IO.Path]::GetFullPath((Join-Path $dir $gitDir))
+        }
+        $mainGitDir = Join-Path $mainPath '.git'
+        # The orphan's gitdir should be inside this repo's .git/worktrees/
+        if ($gitDir.Replace('\', '/') -notlike "$($mainGitDir.Replace('\', '/'))/*") { return }
+
+        Write-Host "Removing orphaned worktree directory: $dir"
+        Remove-Item -Recurse -Force $dir
+        $found = $true
+    }
+
+    if (-not $found) {
+        Write-Host "Nothing to clean up."
+    }
+}
+
 function Invoke-RmWorktree([string]$Name, [bool]$Force) {
     if (-not $Name) {
         Write-Host 'Usage: wt rm <branch-name> [--force]'
@@ -399,5 +443,6 @@ switch ($Command) {
     'rm'      { Invoke-RmWorktree $Arg $isForce }
     'done'    { Invoke-DoneWorktree $Arg $isYes }
     'check'   { Invoke-CheckWorktree $Arg }
+    'prune'   { Invoke-PruneWorktrees }
     default   { Invoke-Switch $Command }
 }
