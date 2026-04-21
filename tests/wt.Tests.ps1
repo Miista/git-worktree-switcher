@@ -580,6 +580,55 @@ Describe 'Invoke-CheckWorktree' {
     }
 }
 
+Describe 'Invoke-CheckWorktree --all' {
+    Context 'mixed worktrees - some clean, some not' {
+        BeforeAll {
+            $script:repo = New-TestRepo
+            Set-Location $script:repo.MainPath
+
+            # clean-all: committed, pushed, tracked
+            git checkout -b clean-all --quiet 2>$null
+            New-Item -ItemType File -Path (Join-Path $script:repo.MainPath 'ca.txt') -Force | Out-Null
+            git add ca.txt
+            git commit -m "clean-all commit" --quiet
+            git push -u origin clean-all --quiet 2>$null
+            git checkout master --quiet 2>$null
+            $script:cleanPath = Join-Path $script:repo.Root 'clean-all'
+            git worktree add $script:cleanPath clean-all --quiet 2>$null
+
+            # dirty-all: has uncommitted changes
+            git checkout -b dirty-all --quiet 2>$null
+            git push -u origin dirty-all --quiet 2>$null
+            git checkout master --quiet 2>$null
+            $script:dirtyPath = Join-Path $script:repo.Root 'dirty-all'
+            git worktree add $script:dirtyPath dirty-all --quiet 2>$null
+            New-Item -ItemType File -Path (Join-Path $script:dirtyPath 'dirty.txt') -Force | Out-Null
+
+            $null = (. $script:ScriptPath help) 6>&1
+        }
+
+        AfterAll {
+            Remove-TestRepo $script:repo.Root
+        }
+
+        It 'lists all non-main worktrees' {
+            $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
+            $output | Should -Match 'clean-all'
+            $output | Should -Match 'dirty-all'
+        }
+
+        It 'shows pass for clean worktrees' {
+            $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
+            $output | Should -Match '✓.*clean-all|clean-all.*✓'
+        }
+
+        It 'shows fail for dirty worktrees' {
+            $output = (Invoke-CheckWorktree '' $true) 6>&1 | Out-String
+            $output | Should -Match '✗.*dirty-all|dirty-all.*✗'
+        }
+    }
+}
+
 Describe 'Invoke-DoneWorktree' {
     Context 'blocks when uncommitted changes (no --yes)' {
         BeforeAll {
@@ -948,5 +997,10 @@ Describe 'Command dispatch' {
     It 'dispatches bare name as worktree switch' {
         $null = (. $script:ScriptPath 'dispatch-a') 6>&1
         (Get-Location).Path | Should -BeLike '*dispatch-a*'
+    }
+
+    It 'dispatches check --all' {
+        $output = (. $script:ScriptPath check --all) 6>&1 | Out-String
+        $output | Should -Match 'dispatch-a'
     }
 }
